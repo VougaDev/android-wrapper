@@ -6,7 +6,7 @@ cannot have. Each app gives its origin, name, icon, colours, account-service cli
 
 | Module | What it is |
 |---|---|
-| `shell` | the core: the WebView on one origin, sign-in in the system's sign-in surface, the link policy, the offline screen, notifications, the native Settings screen, native consent, the bridge base and the extension API |
+| `shell` | the core: one WebView for the company's domains, sign-in inside the app, the link policy, the offline screen, notifications, the native Settings screen, native consent, the bridge base and the extension API |
 | `tracking` | an extension: the position shared while a task is under way, from the background too, after a disclosure |
 | `offline-map` | an extension: map regions kept on the phone, answering the site's map pages and native maps with no network |
 
@@ -29,8 +29,10 @@ The same on Android and iOS; a page branches on the platform only through `platf
 the phone. An app's own extensions add theirs. An extension the app does not have adds no member and no name.
 
 - A page tests for a feature: `window.VougaDevNative && VougaDevNative.features().includes("tracking")`.
-- Injected only into the app's own origin (`addWebMessageListener` + `addDocumentStartJavaScript`), never into another
-  origin's frame, never through `addJavascriptInterface`.
+- Injected into the app's own origin with every member; into the account service's with `completeSignIn` and
+  `nativeSignIn` only; into each `trustedOrigins` origin (frames included) with `platform`, `version`, `features` and
+  `openOutside` only; never into any other origin, never through `addJavascriptInterface`
+  (`addWebMessageListener` + `addDocumentStartJavaScript`).
 - Every Promise resolves, never rejects. The object is frozen.
 - Generic error codes: `bridge_unavailable`, `invalid_request`, `origin_refused`, `unknown_method`.
 - The user agent ends with ` <App>App/<version> (Android)`.
@@ -108,8 +110,8 @@ the phone. An app's own extensions add theirs. An extension the app does not hav
 
 - **At least one real native extension** that matters to its users' job, never a plain website loader (App Store
   guideline 4.2): background location for a task, offline maps or data, a scanner, native screens for the core flow.
-- **Sign-in in the system's sign-in surface, never inside the WebView:** AppAuth with a Custom Tab on Android,
-  `ASWebAuthenticationSession` on iOS.
+- **Sign-in inside the app:** the account service's screens in the WebView, ended by `completeSignIn` (PKCE); Google
+  and Apple natively (`nativeSignIn`); a Custom Tab (`ASWebAuthenticationSession` on iOS) only as the fallback.
 - **No other platform named inside the app.** No self-update outside the store. Privacy policy and account deletion
   in Settings. A disclosure before background location. Notifications asked after sign-in, with a reason.
 
