@@ -1,0 +1,29 @@
+# Secrets: never in this public repository. Each app keeps its own outside git (CI: encrypted secrets).
+google-services.json
+*.jks
+*.keystore
+*.p12
+*.pem
+*.p8
+*.pass
+secrets/
+.env
+.env.*
+local.properties
+keystore.properties
+play-service-account*.json
+*service-account*.json
+*-key.json
+
+# Build outputs and tools
+build/
+.gradle/
+.kotlin/
+.idea/
+*.iml
+*.apk
+*.aab
+*.apks
+captures/
+.cxx/
+.DS_Store
