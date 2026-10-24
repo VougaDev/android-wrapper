@@ -8,27 +8,36 @@ import org.junit.Test
 
 class NativeShimTest {
 
-    private val script = NativeShim.script("1.0.0", listOf("startTracking", "openMissions"))
+    private val script = NativeShim.script("1.0.0", listOf("tracking", "offline-map"), listOf("consent", "startTracking"))
 
     @Test
     fun `the script defines window VougaDevNative with the built-in members, then the app's, in order`() {
         assertTrue(script.contains("Object.defineProperty(window, \"VougaDevNative\""))
         val declared = Regex("""^\s{4}(\w+): function""", RegexOption.MULTILINE).findAll(script).map { it.groupValues[1] }.toList()
-        assertEquals(listOf("platform", "version", "startTracking", "openMissions"), declared)
-        val bare = Regex("""^\s{4}(\w+): function""", RegexOption.MULTILINE).findAll(NativeShim.script("1.0.0", emptyList())).map { it.groupValues[1] }.toList()
+        assertEquals(listOf("platform", "version", "features", "consent", "startTracking"), declared)
+        val bare = Regex("""^\s{4}(\w+): function""", RegexOption.MULTILINE).findAll(NativeShim.script("1.0.0", emptyList(), emptyList())).map { it.groupValues[1] }.toList()
         assertEquals(NativeShim.BUILT_IN, bare)
     }
 
     @Test
-    fun `platform and version are constants written into the text`() {
+    fun `platform, version and features are constants written into the text`() {
         assertTrue(script.contains("""platform: function () { return "android"; }"""))
         assertTrue(script.contains("""version: function () { return "1.0.0"; }"""))
+        assertTrue(script.contains("""features: function () { return ["tracking","offline-map"]; }"""))
+        assertTrue(NativeShim.script("1", emptyList(), emptyList()).contains("""features: function () { return []; }"""))
+    }
+
+    @Test
+    fun `a feature name cannot be code`() {
+        listOf(listOf("a\"]; x"), listOf("Tracking"), listOf("")).forEach {
+            assertThrows(IllegalArgumentException::class.java) { NativeShim.script("1.0.0", it, emptyList()) }
+        }
     }
 
     @Test
     fun `the app's members go through the private channel and answer with a Promise`() {
         assertTrue(script.contains("""startTracking: function (args) { return call("startTracking", args); }"""))
-        assertTrue(script.contains("""openMissions: function (args) { return call("openMissions", args); }"""))
+        assertTrue(script.contains("""consent: function (args) { return call("consent", args); }"""))
         assertTrue(script.contains("args === undefined ? null : args"))
         assertTrue(script.contains("return new Promise("))
         assertTrue(script.contains("window.__vougadevNativeChannel"))
@@ -36,8 +45,8 @@ class NativeShimTest {
 
     @Test
     fun `a member name cannot be code, a built-in or twice`() {
-        listOf(listOf("a(){}; x"), listOf("platform"), listOf("version"), listOf("Start"), listOf("go", "go"), listOf("")).forEach {
-            assertThrows(IllegalArgumentException::class.java) { NativeShim.script("1.0.0", it) }
+        listOf(listOf("a(){}; x"), listOf("platform"), listOf("features"), listOf("Start"), listOf("go", "go"), listOf("")).forEach {
+            assertThrows(IllegalArgumentException::class.java) { NativeShim.script("1.0.0", emptyList(), it) }
         }
     }
 
@@ -50,7 +59,7 @@ class NativeShimTest {
 
     @Test
     fun `a version cannot break out of its string literal`() {
-        val hostile = NativeShim.script("1\"; window.x = 1; \"", emptyList())
+        val hostile = NativeShim.script("1\"; window.x = 1; \"", emptyList(), emptyList())
         assertTrue(hostile.contains("""return "1\"; window.x = 1; \"";"""))
     }
 

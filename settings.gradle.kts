@@ -25,3 +25,6 @@ dependencyResolutionManagement {
 rootProject.name = "android-wrapper"
 // The shell; an app includes this whole build (`includeBuild`) and depends on `com.vougadev:shell`.
 include(":shell")
+// Optional extensions an app turns on.
+include(":tracking")
+include(":offline-map")

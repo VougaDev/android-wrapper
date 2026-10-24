@@ -5,18 +5,20 @@ import org.json.JSONObject
 /**
  * `window.VougaDevNative`, the one native interface a page sees - the name and shape every VougaDev app keeps, and an
  * iOS app injects too, which is why every call that reaches the phone answers with a Promise (a WKWebView message
- * handler is asynchronous). Two members are the shell's and every app has them:
+ * handler is asynchronous). The core's members, in every app:
  *
  * ```
  * VougaDevNative.platform()            -> "android"                  (sync, a constant)
  * VougaDevNative.version()             -> "1.0.0"                    (sync, the app's versionName)
+ * VougaDevNative.features()            -> ["tracking", ...]          (sync, the extensions this app has)
+ * VougaDevNative.consent()             -> Promise<{<purpose>: bool}>
+ * VougaDevNative.openSettings()        -> Promise<{ok: true}>
  * ```
  *
- * The others are the [methods] of the app's own features (Ship: `startTracking`, `stopTracking`, `trackingState`,
- * `openMissions`; README.md), each `name(args) -> Promise<{ok: true, ...} | {ok: false, error}>`.
- * A page tests for a member with `typeof window.VougaDevNative.<name> === "function"`; absent, it runs in a plain
- * browser, or in an app without that feature. A Promise always resolves, never rejects. The object is frozen and cannot
- * be replaced.
+ * The others are the [methods] of the app's extensions (the `tracking` extension: `startTracking`, `stopTracking`,
+ * `trackingState`; README.md), each `name(args) -> Promise<{ok: true, ...} | {ok: false, error}>`. A page tests for a
+ * feature with `VougaDevNative.features().includes("tracking")`; outside the app `window.VougaDevNative` is absent. A
+ * Promise always resolves, never rejects. The object is frozen and cannot be replaced.
  *
  * Two WebView features carry it, BOTH restricted to [originRules]: a document-start script (this [script]) that defines
  * `window.VougaDevNative`, and a web message listener that injects the private [CHANNEL] object the script talks
@@ -40,10 +42,11 @@ object NativeShim {
     const val ERROR_UNAVAILABLE = "bridge_unavailable"
     const val ERROR_INVALID_REQUEST = "invalid_request"
 
-    /** The members every app has, before its own. */
-    val BUILT_IN = listOf("platform", "version")
+    /** The synchronous members every app has, before the Promise ones. */
+    val BUILT_IN = listOf("platform", "version", "features")
 
     private val METHOD_NAME = Regex("^[a-z][A-Za-z0-9]*$")
+    private val FEATURE_NAME = Regex("^[a-z][a-z0-9-]*$")
 
     /**
      * The allowed-origin rule for both the script and the listener: exactly the site's origin, `scheme://host[:port]` with
@@ -54,12 +57,15 @@ object NativeShim {
 
     /**
      * The document-start script. [version] is the app's versionName, written as a JSON string literal so it cannot break
-     * out of it; [methods] are the app's members, in the order its contract lists them (plain identifiers only).
+     * out of it; [features] are the extensions' names; [methods] are the Promise members (the core's, then the
+     * extensions'), plain identifiers only.
      */
-    fun script(version: String, methods: List<String>): String {
+    fun script(version: String, features: List<String>, methods: List<String>): String {
         require(methods.all { METHOD_NAME.matches(it) } && methods.none { it in BUILT_IN } && methods.distinct() == methods) {
             "Bridge members must be distinct identifiers other than ${BUILT_IN}: $methods"
         }
+        require(features.all { FEATURE_NAME.matches(it) }) { "Feature names: $features" }
+        val featureList = org.json.JSONArray(features).toString()
         val platform = JSONObject.quote(PLATFORM)
         val versionLiteral = JSONObject.quote(version)
         val unavailable = JSONObject.quote(ERROR_UNAVAILABLE)
@@ -105,7 +111,8 @@ object NativeShim {
   }
   var api = Object.freeze({
     platform: function () { return $platform; },
-    version: function () { return $versionLiteral; }$members
+    version: function () { return $versionLiteral; },
+    features: function () { return $featureList; }$members
   });
   Object.defineProperty(window, "$NAME", { value: api, writable: false, enumerable: false, configurable: false });
 })();

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tracking_channel_name">Partage de position</string>
+    <string name="tracking_channel_description">Affichée pendant que votre position est partagée.</string>
+    <string name="tracking_default_title">Partage de position</string>
+    <string name="tracking_default_text">Votre position est partagée pendant que votre tâche est en cours.</string>
+    <string name="account_channel_name">Compte</string>
+    <string name="account_channel_description">Vous informe lorsque vous devez vous reconnecter.</string>
+    <string name="tracking_sign_in_title">Veuillez vous reconnecter pour partager votre position</string>
+    <string name="tracking_sign_in_text">Votre position n\'est plus partagée. Ouvrez l\'application et connectez-vous.</string>
+    <string name="tracking_disclosure_title">Partage de position</string>
+    <string name="tracking_disclosure_text">Pendant que votre tâche est en cours, cette application collecte votre position environ une fois par minute, même lorsque l\'application est fermée ou n\'est pas utilisée. Le partage s\'arrête à la fin de la tâche, à votre déconnexion, et au plus tard après six heures. Une notification l\'indique pendant tout ce temps.</string>
+    <string name="tracking_disclosure_accept">J\'accepte</string>
+    <string name="tracking_disclosure_decline">Plus tard</string>
+</resources>

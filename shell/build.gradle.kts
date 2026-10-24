@@ -38,6 +38,12 @@ dependencies {
     // Only for the system "Turn on location" dialog (SettingsClient).
     implementation(libs.play.services.location)
     implementation(libs.appauth)
+    // The native Settings screen, and the account service's pages opened over the app.
+    implementation(libs.androidx.preference)
+    implementation(libs.androidx.browser)
+    // Push from the notification hub: inert unless the app was built with its Firebase file.
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.messaging)
     testImplementation(libs.junit)
     testImplementation(libs.org.json)
 }

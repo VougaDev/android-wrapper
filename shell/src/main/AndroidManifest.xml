@@ -5,7 +5,33 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
+    <!-- Notifications from the hub (Android 13+ asks; the shell asks right after sign-in, with the app's sentence). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <application>
+        <!-- The native Settings screen (notifications, privacy and data, sign-out, version). -->
+        <activity
+            android:name="com.vougadev.shell.SettingsActivity"
+            android:exported="false" />
+
+        <!-- Push: inert until the app is built with its Firebase file. -->
+        <service
+            android:name="com.vougadev.shell.push.ShellMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="notifications" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/shell_notification_icon" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/shell_accent" />
+
         <!-- Photos taken with the camera app are written here before they are sent; an app adds paths in its own
              res/xml/shell_file_paths.xml. -->
         <provider

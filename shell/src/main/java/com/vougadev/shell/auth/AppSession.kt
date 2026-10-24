@@ -17,11 +17,17 @@ import java.io.IOException
 /**
  * The app's sign-in, one per process (the app keeps the instance): the sealed refresh token, the account service's endpoints, the
  * trade for the site's session and the one [SessionKeeper] every caller shares (the WebView, the native screens, push).
- * An app subclasses it only to clear what its own features keep ([beforeSessionEnds], [afterSignOut]).
+ * Made by the app's [com.vougadev.shell.Shell], which passes what sign-out also clears: [beforeSessionEnds] is called
+ * while the site's session is still open (its caller never renews it), [afterSignOut] once tokens and cookies are gone.
  */
-open class AppSession(context: Context, val config: ShellConfig) {
+class AppSession(
+    context: Context,
+    val config: ShellConfig,
+    private val beforeSessionEnds: suspend (AppCaller) -> Unit = {},
+    private val afterSignOut: suspend () -> Unit = {},
+) {
 
-    protected val app: Context = context.applicationContext
+    private val app: Context = context.applicationContext
     private val prefs = app.getSharedPreferences(config.storeName + "_auth", Context.MODE_PRIVATE)
 
     val origin = AppOrigin(config.baseUrl)
@@ -70,8 +76,8 @@ open class AppSession(context: Context, val config: ShellConfig) {
 
     /**
      * SIGNING OUT OF THIS APP ON THIS PHONE, never out of VougaDev (no end_session: the person's other applications stay
-     * signed in). In this order, while the site's session still exists: the app's own [beforeSessionEnds] (its push
-     * token forgotten), the site's session ended; then the refresh token is revoked at the account service, and the tokens, the cookies
+     * signed in). In this order, while the site's session still exists: [beforeSessionEnds] (the push token
+     * forgotten), the site's session ended; then the refresh token is revoked at the account service, and the tokens, the cookies
      * and what the app keeps ([afterSignOut]) go.
      */
     suspend fun signOut() = withContext(Dispatchers.IO) {
@@ -85,12 +91,6 @@ open class AppSession(context: Context, val config: ShellConfig) {
         cookies.clear()
         afterSignOut()
     }
-
-    /** Called on sign-out while the site's session is still open; [caller] never renews it. */
-    protected open suspend fun beforeSessionEnds(caller: AppCaller) = Unit
-
-    /** Called on sign-out once the tokens and cookies are gone: what the app keeps of the person goes too. */
-    protected open suspend fun afterSignOut() = Unit
 
     /** The web's own sign-out (`/auth/logout/`, POST with CSRF); its answer changes nothing on the phone. */
     private suspend fun endSiteSession(jar: String) = withContext(Dispatchers.IO) {

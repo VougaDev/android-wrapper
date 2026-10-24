@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="offline_map_ready_title">Carte hors ligne disponible</string>
+    <string name="offline_map_ready_body">La carte de votre zone s\'ouvre désormais sans connexion.</string>
+    <string name="offline_map_title">Cartes hors ligne</string>
+    <string name="offline_map_none">Aucune sur ce téléphone pour l\'instant (téléchargées en Wi-Fi)</string>
+    <string name="offline_map_delete">Supprimer</string>
+    <string name="offline_map_delete_text">Supprimer les cartes hors ligne de ce téléphone ? Elles seront téléchargées à nouveau en Wi-Fi.</string>
+</resources>

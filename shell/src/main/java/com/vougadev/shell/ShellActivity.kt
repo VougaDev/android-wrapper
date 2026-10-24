@@ -1,6 +1,8 @@
 package com.vougadev.shell
 
+import android.Manifest
 import android.annotation.SuppressLint
+import android.content.pm.PackageManager
 import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.Context
@@ -38,6 +40,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.content.edit
 import androidx.core.content.FileProvider
 import androidx.core.net.toUri
 import androidx.core.view.ViewCompat
@@ -59,66 +62,55 @@ import com.vougadev.shell.web.NativeBridge
 import com.vougadev.shell.web.NativeShim
 import com.vougadev.shell.web.PullGuard
 import com.vougadev.shell.web.SignInRoute
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.vougadev.shell.push.Push
+import com.vougadev.shell.push.PushNotifications
 import kotlinx.coroutines.NonCancellable
+import org.json.JSONObject
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayInputStream
 import java.io.File
 
 /**
- * THE SHELL'S ONE SCREEN (VougaDev Native, README.md): the app's site in a WebView, and the
- * few things a page cannot do on its own - Android's location prompts and the "Turn on location" dialog, the camera
- * app for a photo, maps and phone links handed to their apps, the back press over an open modal, pull-to-refresh, a
- * native offline screen, a crashed renderer rebuilt. An app extends it with its own features: the members of
- * `window.VougaDevNative` ([bridgeMethods]), the native screens a path opens ([nativeScreen]) and the hooks below.
+ * THE SHELL'S ONE SCREEN (VougaDev Native, README.md): the app's site in a WebView, and the few things a page cannot do
+ * on its own - Android's location prompts and the "Turn on location" dialog, the camera app for a photo, maps and phone
+ * links handed to their apps, the back press over an open modal, pull-to-refresh, a native offline screen, a crashed
+ * renderer rebuilt. What else the app does comes from its extensions ([Extension]): their members of
+ * `window.VougaDevNative`, the native screens a path opens, the pages they answer offline.
  *
- * SIGN-IN IS NATIVE, IN THE SYSTEM BROWSER (the account service's rule: never a WebView). The app signs in with the account service in a Custom Tab
- * ([BrowserSignIn]), trades the access token for the site's session (`/auth/app-session/`) and puts its cookies in the
- * WebView's jar. When the WebView heads for a sign-in (`/auth/login/`, the account service's pages) the session is renewed silently
- * ([com.vougadev.shell.auth.SessionKeeper]); only a refused refresh shows the sign-in screen, one button. The web's
- * sign-out form is taken over: the app's own [beforeSignOut], the site's session ended, refresh token revoked,
- * everything of the person cleared on the phone - never the VougaDev session.
+ * SIGN-IN IS NATIVE, IN THE SYSTEM BROWSER (the account service's rule: never a WebView). The app signs in with the
+ * account service in a Custom Tab ([BrowserSignIn]), trades the access token for the site's session
+ * (`/auth/app-session/`) and puts its cookies in the WebView's jar. When the WebView heads for a sign-in (`/auth/login/`,
+ * the account service's pages) the session is renewed silently ([com.vougadev.shell.auth.SessionKeeper]); only a
+ * refused refresh shows the sign-in screen, one button. Right after a new sign-in, notifications are asked with the
+ * app's own sentence, once. The web's sign-out form is taken over: the extensions stop, the site's session ends, the
+ * refresh token is revoked, everything of the person is cleared on the phone - never the VougaDev session.
  *
  * Only the app's origin is ever loaded or granted anything. See [AppOrigin].
  *
- * THE BRIDGE IS `window.VougaDevNative`, the one name every VougaDev app uses: `platform()`,
- * `version()` and the app's [bridgeMethods] ([NativeShim], [NativeBridge]), injected with `addWebMessageListener` and
- * `addDocumentStartJavaScript` restricted to the app's origin, never `addJavascriptInterface`.
+ * THE BRIDGE IS `window.VougaDevNative`, the one name every VougaDev app uses: `platform()`, `version()`, `features()`,
+ * `consent()`, `openSettings()` and the extensions' members ([NativeShim], [NativeBridge]), injected with
+ * `addWebMessageListener` and `addDocumentStartJavaScript` restricted to the app's origin, never
+ * `addJavascriptInterface`.
+ *
+ * An app declares a subclass as its launcher (its component name stays the app's own) and adds nothing to it.
  */
-abstract class ShellActivity : AppCompatActivity() {
+open class ShellActivity : AppCompatActivity(), ExtensionHost {
 
-    /** The app's session, one per process: the app keeps the instance. */
-    protected abstract val session: AppSession
+    final override val shell: Shell by lazy { Shell.of(this) }
+    private val session get() = shell.session
 
-    protected val origin: AppOrigin by lazy { session.origin }
+    private val origin: AppOrigin by lazy { session.origin }
     private val auth: AppOrigin by lazy { AppOrigin(session.config.authBaseUrl) }
-    protected val location = LocationAsk(this)
+    final override val location = LocationAsk(this)
+    final override val activity: AppCompatActivity get() = this
     private lateinit var webView: WebView
     private lateinit var pull: SwipeRefreshLayout
     private lateinit var errorView: View
 
-    // --- What the app adds -----------------------------------------------------------------------------------------
-
-    /** The members of `window.VougaDevNative` beyond `platform()` and `version()`, in the order the contract lists them. */
-    protected open fun bridgeMethods(): Map<String, NativeBridge.Method> = emptyMap()
-
-    /**
-     * The native screen a same-origin [path] (no query) opens instead of loading it, or null to load it in the WebView.
-     * Fixed in the binary (Apple 2.5.2): the server never chooses what is native.
-     */
-    protected open fun nativeScreen(path: String?): Intent? = null
-
-    /** A page of the site finished loading with the session open: what the app does once signed in (push, follow-ups). */
-    protected open fun onSignedInPage() = Unit
-
-    /** A person just signed in with the browser (not a silent renewal). */
-    protected open fun afterNewSignIn() = Unit
-
-    /** The web's sign-out is starting: stop what works for this person (a service, a share). */
-    protected open fun beforeSignOut() = Unit
-
-    /** What the app keeps of a person goes: never signed in with the app, or the account service refused the refresh. */
-    protected open fun forgetLocalData() = Unit
+    /** What each extension does inside this activity. */
+    private var attachments: List<Attachment> = emptyList()
 
     // --- Sign-in -----------------------------------------------------------------------------------------------------
 
@@ -154,7 +146,25 @@ abstract class ShellActivity : AppCompatActivity() {
     /** The URL whose main-frame load failed, reloaded by Retry. */
     private var failedUrl: String? = null
 
-    // --- File chooser (package photos) ------------------------------------------------------------------------------
+    // --- Permissions an extension asks, notifications, Settings -----------------------------------------------------
+
+    private var afterPermissions: (() -> Unit)? = null
+
+    private val permissionsLauncher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        afterPermissions?.also { afterPermissions = null }?.invoke()
+    }
+
+    private var afterNotifications: (() -> Unit)? = null
+
+    private val notificationsLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
+        afterNotifications?.also { afterNotifications = null }?.invoke()
+    }
+
+    private val settingsLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == SettingsActivity.RESULT_SIGN_OUT) signOut()
+    }
+
+    // --- File chooser (photos) ------------------------------------------------------------------------------
 
     private var fileCallback: ValueCallback<Array<Uri>>? = null
     private var cameraOutput: Uri? = null
@@ -212,6 +222,8 @@ abstract class ShellActivity : AppCompatActivity() {
         }
         webView.webViewClient = ShellClient()
         webView.webChromeClient = ShellChrome()
+        // The extensions' parts of this screen, before it starts (they may register activity result launchers).
+        attachments = shell.extensions.mapNotNull { it.attach(this) }
         // Before the first load: a document-start script only reaches documents created after it.
         installNativeBridge()
 
@@ -248,10 +260,16 @@ abstract class ShellActivity : AppCompatActivity() {
         }
 
         clearOldCaptures()
+        PushNotifications.ensureChannel(this)
         val asked = if (savedInstanceState == null) pageFrom(intent) else null
         // THE FIRST LOAD WAITS FOR THE WINDOW (measured on a low-end phone): a renderer requested before the WebView is
         // attached was refused by the system, and the page stayed black until a reboot.
-        firstLoad = { boot(asked, savedInstanceState) }
+        firstLoad = { withConsent { boot(asked, savedInstanceState) } }
+    }
+
+    /** The native consent dialog before the first page, once ([Consent]); then its cookie for the site. */
+    private fun withConsent(then: () -> Unit) {
+        if (Consent.needed(this)) Consent.ask(this, then) else then()
     }
 
     /**
@@ -291,6 +309,7 @@ abstract class ShellActivity : AppCompatActivity() {
             webView.post { if (webViewAlive) load() }
         }
         if (webViewAlive) webView.onResume()
+        attachments.forEach { it.onResume() }
     }
 
     override fun onPause() {
@@ -306,6 +325,7 @@ abstract class ShellActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        attachments.forEach { it.onDestroy() }
         browser.dispose()
         fileCallback?.onReceiveValue(null)
         fileCallback = null
@@ -433,7 +453,7 @@ abstract class ShellActivity : AppCompatActivity() {
         }
     }
 
-    /** The site's session is in the jar: the page asked for (or home), and the app's [afterNewSignIn]. */
+    /** The site's session is in the jar: the page asked for (or home); after a new sign-in, the push token and its ask. */
     private fun sessionOpen(newSignIn: Boolean) {
         hideSignIn()
         val target = afterSignIn ?: home()
@@ -441,21 +461,69 @@ abstract class ShellActivity : AppCompatActivity() {
         if (newSignIn) {
             // another person may have used the phone before: no way back to their pages
             webView.clearHistory()
-            afterNewSignIn()
+            Push.afterSignIn(this)
+            askNotificationsOnce()
         }
         if (webViewAlive) open(target)
     }
 
     /**
-     * THE WEB'S SIGN-OUT, TAKEN OVER: the app's [beforeSignOut], then [AppSession.signOut] (the site's session ended
-     * while it still exists, the refresh token revoked at the account service, the tokens and cookies cleared), and the web storage. The VougaDev
-     * session is not ended (no end_session): the person's other applications stay signed in.
+     * NOTIFICATIONS ARE ASKED RIGHT AFTER SIGN-IN, ONCE: the app's own sentence (what it sends and why), then the
+     * system's dialog (Android 13+). A refusal blocks nothing; Settings is where they are turned on later.
+     */
+    private fun askNotificationsOnce() {
+        if (!Push.enabled(this) || Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) return
+        val prefs = getSharedPreferences(session.config.storeName + "_notifications", MODE_PRIVATE)
+        if (prefs.getBoolean(KEY_ASKED, false)) return
+        prefs.edit { putBoolean(KEY_ASKED, true) }
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.shell_notifications_title)
+            .setMessage(R.string.shell_notifications_reason)
+            .setPositiveButton(R.string.shell_notifications_continue) { _, _ -> askNotifications {} }
+            .setNegativeButton(R.string.shell_notifications_later, null)
+            .show()
+    }
+
+    override fun askNotifications(then: () -> Unit) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return then()
+        afterNotifications = then
+        notificationsLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+    }
+
+    override fun requestPermissions(permissions: Array<String>, then: () -> Unit) {
+        afterPermissions = then
+        permissionsLauncher.launch(permissions)
+    }
+
+    private fun openSettings() = settingsLauncher.launch(Intent(this, SettingsActivity::class.java))
+
+    /** Every extension's part of the person on this phone goes (off the main thread, never cancelled half-way). */
+    private fun forgetLocalData() {
+        lifecycleScope.launch { withContext(NonCancellable) { shell.forget() } }
+    }
+
+    /** A signed-in page: the push token once per start, and each extension's follow-up. */
+    private fun onSignedInPage() {
+        Push.startOncePerProcess(this)
+        attachments.forEach { it.onSignedInPage() }
+    }
+
+    /** The native screen an extension owns for a same-origin [path], if any. */
+    private fun nativeScreen(path: String?): Intent? =
+        path?.let { p -> shell.extensions.firstNotNullOfOrNull { it.nativeScreen(this, p) } }
+
+    /**
+     * THE WEB'S SIGN-OUT, TAKEN OVER (and Settings' Sign out): the extensions stop, then [AppSession.signOut] (the
+     * site's session ended while it still exists, the refresh token revoked at the account service, the tokens, cookies
+     * and what the extensions keep cleared), and the web storage. The VougaDev session is not ended (no end_session):
+     * the person's other applications stay signed in.
      */
     private fun signOut() {
         if (signingOut) return
         signingOut = true
         show(SignInScreen.SIGNING_OUT)
-        beforeSignOut()
+        attachments.forEach { it.beforeSignOut() }
         lifecycleScope.launch {
             try {
                 withContext(NonCancellable) { session.signOut() }
@@ -468,6 +536,7 @@ abstract class ShellActivity : AppCompatActivity() {
                 webView.clearHistory()
                 webView.clearCache(false)
             }
+            Consent.setCookie(this@ShellActivity)
             afterSignIn = null
             show(SignInScreen.SIGN_IN)
         }
@@ -476,6 +545,7 @@ abstract class ShellActivity : AppCompatActivity() {
     /** Never signed in with the app: an earlier web session's cookies and data are not this app's. */
     private fun forgetOnPhone() {
         session.cookies.clear()
+        Consent.setCookie(this)
         forgetLocalData()
     }
 
@@ -546,12 +616,18 @@ abstract class ShellActivity : AppCompatActivity() {
 
         /**
          * The web's sign-out form (a top-level POST to `/auth/logout/`) never reaches the site from the WebView: the app
-         * signs out itself, in its own order ([signOut]). Called on a WebView thread.
+         * signs out itself, in its own order ([signOut]). A same-origin GET an extension can answer from the phone (an
+         * offline map tile) is answered there. Called on a WebView thread.
          */
         override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
-            if (!request.isForMainFrame || !SignInRoute.isSignOut(request.method, origin.matches(request.url), request.url.path)) return null
-            runOnUiThread { signOut() }
-            return WebResourceResponse("text/html", "utf-8", ByteArrayInputStream(ByteArray(0)))
+            val url = request.url
+            val isSite = origin.matches(url)
+            if (request.isForMainFrame && SignInRoute.isSignOut(request.method, isSite, url.path)) {
+                runOnUiThread { signOut() }
+                return WebResourceResponse("text/html", "utf-8", ByteArrayInputStream(ByteArray(0)))
+            }
+            if (!isSite || !request.method.equals("GET", ignoreCase = true)) return null
+            return shell.extensions.firstNotNullOfOrNull { it.interceptRequest(applicationContext, url) }
         }
 
         override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
@@ -704,6 +780,15 @@ abstract class ShellActivity : AppCompatActivity() {
 
     // --- window.VougaDevNative ---------------------------------------------------------------------------------------
 
+    /** The core's Promise members, in every app: the consent choices, and the native Settings screen. */
+    private fun coreMethods(): Map<String, NativeBridge.Method> = linkedMapOf(
+        "consent" to NativeBridge.Method { _, answer -> answer(JSONObject(Consent.choices(this).toMap())) },
+        "openSettings" to NativeBridge.Method { _, answer ->
+            openSettings()
+            answer(NativeBridge.ok())
+        },
+    )
+
     /**
      * `window.VougaDevNative` in frames of the app's origin only: the web message listener (the shim's private channel)
      * and the document-start script that defines the object, both restricted to exactly that origin. A WebView without
@@ -714,12 +799,12 @@ abstract class ShellActivity : AppCompatActivity() {
         if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
             if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
                 val rules = NativeShim.originRules(origin)
-                val methods = bridgeMethods()
+                val methods = coreMethods() + attachments.flatMap { it.bridgeMethods().entries }.associate { it.key to it.value }
                 val bridge = NativeBridge(origin, methods)
                 WebViewCompat.addWebMessageListener(webView, NativeShim.CHANNEL, rules) { _, message, sourceOrigin, _, replyProxy ->
                     bridge.onMessage(message.data, sourceOrigin.toString()) { reply -> replyProxy.postMessage(reply) }
                 }
-                WebViewCompat.addDocumentStartJavaScript(webView, NativeShim.script(session.config.versionName, methods.keys.toList()), rules)
+                WebViewCompat.addDocumentStartJavaScript(webView, NativeShim.script(session.config.versionName, shell.features, methods.keys.toList()), rules)
                 return
             }
         }
@@ -740,15 +825,16 @@ abstract class ShellActivity : AppCompatActivity() {
         private const val EXTRA_PAGE_PATH = "com.vougadev.shell.extra.PAGE_PATH"
         private const val TAG = "VougaDevShell"
         private const val CAPTURES_DIR = "captures"
+        private const val KEY_ASKED = "asked"
 
-        /** [activity] is the app's own subclass. */
-        fun openPage(context: Context, activity: Class<out ShellActivity>, path: String?): Intent = Intent(context, activity)
+        /** [launcher] (the app's shell activity) opening the same-origin [path]. */
+        fun withPage(launcher: Intent, path: String?): Intent = launcher
             .setAction(ACTION_OPEN_PAGE)
             .putExtra(EXTRA_PAGE_PATH, path)
             .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
 
-        /** The sign-in, then the same-origin [nextPath]. */
-        fun signIn(context: Context, activity: Class<out ShellActivity>, nextPath: String): Intent = Intent(context, activity)
+        /** [launcher] (the app's shell activity) asking for the sign-in, then the same-origin [nextPath]. */
+        fun withSignIn(launcher: Intent, nextPath: String): Intent = launcher
             .setAction(ACTION_SIGN_IN)
             .putExtra(EXTRA_PAGE_PATH, nextPath)
             .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)

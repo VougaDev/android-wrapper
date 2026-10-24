@@ -13,6 +13,10 @@ webkit = "1.17.1"
 playServicesLocation = "21.4.0"
 # Sign-in in the system browser (the account service refuses a WebView: Google and passkeys do not work there).
 appauth = "0.11.1"
+preference = "1.2.1"
+browser = "1.9.0"
+# Push: compiled in, started only when the app was built with its Firebase file (never in this repository).
+firebaseBom = "34.19.0"
 # Test only: android.jar's org.json is a stub that throws on the JVM.
 orgJson = "20260814"
 
@@ -27,6 +31,10 @@ androidx-webkit = { group = "androidx.webkit", name = "webkit", version.ref = "w
 androidx-swiperefreshlayout = { group = "androidx.swiperefreshlayout", name = "swiperefreshlayout", version.ref = "swipeRefresh" }
 play-services-location = { group = "com.google.android.gms", name = "play-services-location", version.ref = "playServicesLocation" }
 appauth = { group = "net.openid", name = "appauth", version.ref = "appauth" }
+androidx-preference = { group = "androidx.preference", name = "preference-ktx", version.ref = "preference" }
+androidx-browser = { group = "androidx.browser", name = "browser", version.ref = "browser" }
+firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBom" }
+firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging" }
 org-json = { group = "org.json", name = "json", version.ref = "orgJson" }
 
 [plugins]

@@ -9,4 +9,6 @@
     <color name="shell_pull">#FF000000</color>
     <!-- The mark on the sign-in screen: the app's own (its launcher foreground, for example). -->
     <item name="shell_signin_mark" type="drawable">@android:drawable/sym_def_app_icon</item>
+    <!-- The small icon of the app's notifications (one colour): the app's own. -->
+    <item name="shell_notification_icon" type="drawable">@drawable/shell_ic_bell</item>
 </resources>

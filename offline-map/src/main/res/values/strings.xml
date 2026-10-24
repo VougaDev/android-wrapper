@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The offline-map extension's words; an app overrides any of them with its own (same names). -->
+<resources>
+    <string name="offline_map_ready_title">Offline map available</string>
+    <string name="offline_map_ready_body">The map of your area now opens without a connection.</string>
+    <string name="offline_map_title">Offline maps</string>
+    <string name="offline_map_none">None on this phone yet (downloaded on Wi-Fi)</string>
+    <string name="offline_map_delete">Delete</string>
+    <string name="offline_map_delete_text">Delete the offline maps from this phone? They will be downloaded again on Wi-Fi.</string>
+</resources>

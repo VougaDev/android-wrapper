@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The tracking extension's words; an app overrides any of them with its own (same names). -->
+<resources>
+    <string name="tracking_channel_name">Position sharing</string>
+    <string name="tracking_channel_description">Shown while your position is shared.</string>
+    <string name="tracking_default_title">Position sharing</string>
+    <string name="tracking_default_text">Your position is shared while your task is under way.</string>
+    <string name="account_channel_name">Account</string>
+    <string name="account_channel_description">Informs you when you must sign in again.</string>
+    <string name="tracking_sign_in_title">Please sign in again to share your position</string>
+    <string name="tracking_sign_in_text">Your position is no longer shared. Open the application and sign in.</string>
+    <string name="tracking_disclosure_title">Position sharing</string>
+    <string name="tracking_disclosure_text">While your task is under way, this application collects your position about once a minute, even when the application is closed or not in use. The sharing stops when the task ends, when you sign out, and after six hours at most. A notification shows it the whole time.</string>
+    <string name="tracking_disclosure_accept">I agree</string>
+    <string name="tracking_disclosure_decline">Not now</string>
+</resources>

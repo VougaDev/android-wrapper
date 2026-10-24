@@ -1,4 +1,5 @@
-# The shell's JVM tests, lint and a build of the library, on every push and pull request. No secret is used or needed.
+# The shell's and the extensions' JVM tests, lint and a release build, on every push and pull request. No secret is used
+# or needed.
 # The runner's own Android SDK serves (ANDROID_HOME); the Android Gradle plugin fetches the platform it compiles with.
 name: android
 on:
@@ -16,4 +17,4 @@ jobs:
           distribution: temurin
           java-version: "25"
       - uses: gradle/actions/setup-gradle@v5
-      - run: ./gradlew --no-daemon :shell:testDebugUnitTest :shell:lintDebug :shell:assembleRelease
+      - run: ./gradlew --no-daemon testDebugUnitTest lintDebug assembleRelease
