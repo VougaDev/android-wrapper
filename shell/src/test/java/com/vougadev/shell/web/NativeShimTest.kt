@@ -38,7 +38,7 @@ class NativeShimTest {
     fun `the app's members go through the private channel and answer with a Promise`() {
         assertTrue(script.contains("""startTracking: function (args) { return call("startTracking", args); }"""))
         assertTrue(script.contains("""consent: function (args) { return call("consent", args); }"""))
-        assertTrue(script.contains("args === undefined ? null : args"))
+        assertTrue(script.contains("""typeof args === "string" ? { value: args } : args"""))
         assertTrue(script.contains("return new Promise("))
         assertTrue(script.contains("window.__vougadevNativeChannel"))
     }

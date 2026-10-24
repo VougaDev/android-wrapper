@@ -6,9 +6,12 @@ import java.util.Locale
  * Where a top-level navigation goes. ONE APP, ONE WEBVIEW: the app's site, the company's other domains and subdomains,
  * and the account service's pages (its sign-in included) all load in the same WebView, with one navigation and the
  * native back - never the browser, never a separate screen. The site's own sign-in address renews the session instead
- * ([SignInRoute]). Logins of other companies refuse a WebView: they finish in the system's sign-in surface. A third
- * party's site (a checkout, a map) opens in an in-app browser sheet; a phone number, an e-mail, a map or a chat opens
- * the phone's own app. Pure, tested on the JVM.
+ * ([SignInRoute]). Payment stays inside too: the company's checkout is a company domain, and a step of an outside company
+ * met on the way (a bank's 3-D Secure, a mobile-money operator's confirmation) stays in the WebView while it works
+ * there. A provider known to refuse WebViews ([outside hosts][com.vougadev.shell.ShellConfig.outsideHosts]) becomes an
+ * outside step in an in-app sheet that returns by itself; another company's login finishes in the system's sign-in
+ * surface. Another company's site the person chose to open goes to an in-app browser sheet; a phone number, an
+ * e-mail, a map or a chat opens the phone's own app. Pure, tested on the JVM.
  */
 object LinkPolicy {
 
@@ -25,8 +28,11 @@ object LinkPolicy {
         /** Another company's login (Google, Apple), which refuses a WebView: the sign-in in the system's surface. */
         SIGN_IN_ELSEWHERE,
 
-        /** A third party's site: an in-app browser sheet (Custom Tab) over the app. */
+        /** Another company's site the person chose to open: an in-app browser sheet (Custom Tab) over the app. */
         OPEN_THIRD_PARTY,
+
+        /** A provider that refuses WebViews, met on the way (PayPal): an outside step that returns to the WebView. */
+        OUTSIDE_STEP,
 
         /** `tel:`, `mailto:`, `geo:`, a maps or chat app's scheme: the phone's own app. */
         OPEN_APP,
@@ -43,7 +49,10 @@ object LinkPolicy {
     /** Logins of other companies that refuse an embedded WebView. */
     val SIGN_IN_ELSEWHERE_HOSTS = setOf("accounts.google.com", "appleid.apple.com")
 
-    /** [path] is the URL's path (no query); [companyDomains] the app's ([com.vougadev.shell.ShellConfig.companyDomains]). */
+    /**
+     * [path] is the URL's path (no query); [companyDomains] and [outsideHosts] the app's ([com.vougadev.shell.ShellConfig]);
+     * [userTapped]: the person tapped it (not a redirect within a flow).
+     */
     fun decide(
         scheme: String?,
         host: String?,
@@ -51,6 +60,8 @@ object LinkPolicy {
         isNativeRoute: Boolean,
         path: String? = null,
         companyDomains: List<String> = emptyList(),
+        outsideHosts: List<String> = emptyList(),
+        userTapped: Boolean = true,
     ): Decision {
         val s = scheme?.lowercase(Locale.ROOT) ?: return Decision.BLOCK
         val web = s == "https" || s == "http"
@@ -61,6 +72,9 @@ object LinkPolicy {
             isSite -> Decision.LOAD_INSIDE
             s == "https" && isCompany(h, companyDomains) -> Decision.LOAD_INSIDE
             web && h in SIGN_IN_ELSEWHERE_HOSTS -> Decision.SIGN_IN_ELSEWHERE
+            web && isCompany(h, outsideHosts) -> Decision.OUTSIDE_STEP
+            // A step of a flow (a redirect, nobody tapped): it stays in the WebView while it works there.
+            web && !userTapped -> Decision.LOAD_INSIDE
             web -> Decision.OPEN_THIRD_PARTY
             s == "intent" -> Decision.OPEN_INTENT
             s in BLOCKED -> Decision.BLOCK

@@ -15,6 +15,12 @@ package com.vougadev.shell
  * - [pageMarker]: a CSS selector every page of the site has (Ship: `.ship-bar`): a page without it is an edge's or a
  *   proxy's error, never shown - the copy kept on the phone, or the native screen, instead;
  * - [googleServerClientId]: the account service's Google client, for `nativeSignIn("google")`; null: not offered;
+ * - [trustedOrigins]: other company origins whose frames get `platform()`, `version()`, `features()` and
+ *   `openOutside()` (Ship: the payment service's `https://pay.vougadev.com`, embedded in the site too);
+ * - [outsideReturnPrefix]: the https address under which an outside step (a provider that refuses WebViews) comes
+ *   back, closing its sheet and continuing in the WebView (Ship: `https://pay.vougadev.com/app-return/`);
+ * - [outsideHosts]: providers that refuse WebViews (Ship: `paypal.com`): a navigation to them from a company page
+ *   becomes such an outside step;
  * - [privacyUrl], [accountDeletionUrl]: what Settings > Privacy and data opens (the stores ask both inside the app);
  * - [notificationsPageUrl]: the hub's page where the person chooses what they receive, opened from Settings;
  * - [pushDevicesPath]: the site's address that hands this phone's push token to the hub (`PUT`, and `POST …/forget` on
@@ -40,6 +46,9 @@ data class ShellConfig(
     val consent: List<ConsentPurpose> = emptyList(),
     val pageMarker: String? = null,
     val googleServerClientId: String? = null,
+    val trustedOrigins: List<String> = emptyList(),
+    val outsideReturnPrefix: String? = null,
+    val outsideHosts: List<String> = emptyList(),
     val offlineCacheBytes: Long = com.vougadev.shell.offline.PageCache.DEFAULT_CAP_BYTES,
     val debug: Boolean = false,
     val scopes: String = DEFAULT_SCOPES,

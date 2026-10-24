@@ -44,6 +44,10 @@ the phone. An app's own extensions add theirs. An extension the app does not hav
   `VougaDevNative.completeSignIn({code, state})` on its origin (or its redirect to the app); Google signs in natively
   (`nativeSignIn({provider: "google"})`, Credential Manager); passkeys through the WebView's WebAuthn support. A Custom
   Tab only as the fallback while the account service does not hand other companies' logins to the app.
+- **Payment stays in the WebView.** The company's checkout is a company domain; a bank's or operator's step met on
+  the way stays inside while it works there. Only a step that refuses WebViews (`outsideHosts`, or the checkout's
+  `openOutside({url, returnUrl})` on a `trustedOrigins` origin) goes to Chrome's Auth Tab and comes back by itself
+  under `outsideReturnPrefix`, loading in the WebView.
 - **Never a raw error page.** An answer that is not the site's own (a 502, 503 or 504 from the edge, a page without the
   site's `pageMarker`) is treated as offline: the copy kept on the phone, or the native screen.
 - **An app's words**: no page, site, web, browser, link, URL, reload or tab in any native text (en, fr, es).

@@ -102,7 +102,9 @@ object NativeShim {
       if (!c) { resolve({ ok: false, error: $unavailable }); return; }
       var id = nextId++;
       var text;
-      try { text = JSON.stringify({ id: id, method: method, args: args === undefined ? null : args }); }
+      // A bare string (`nativeSignIn("google")`) travels as {value}.
+      var sent = args === undefined ? null : (typeof args === "string" ? { value: args } : args);
+      try { text = JSON.stringify({ id: id, method: method, args: sent }); }
       catch (e) { resolve({ ok: false, error: $invalid }); return; }
       pending[id] = resolve;
       try { c.postMessage(text); }

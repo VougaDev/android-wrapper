@@ -12,8 +12,8 @@ class ShellWebTest {
 
     private val company = listOf("example.org")
 
-    private fun decide(scheme: String?, host: String?, isSite: Boolean = false, native: Boolean = false) =
-        LinkPolicy.decide(scheme, host, isSite, native, path = "/", companyDomains = company)
+    private fun decide(scheme: String?, host: String?, isSite: Boolean = false, native: Boolean = false, tapped: Boolean = true) =
+        LinkPolicy.decide(scheme, host, isSite, native, path = "/", companyDomains = company, outsideHosts = listOf("paypal.example"), userTapped = tapped)
 
     @Test
     fun theLinkPolicyHandsNativeRoutesToTheApp() {
@@ -33,6 +33,17 @@ class ShellWebTest {
         assertEquals(LinkPolicy.Decision.OPEN_THIRD_PARTY, decide("https", "example.org.evil.io"))
         assertEquals(LinkPolicy.Decision.OPEN_THIRD_PARTY, decide("https", "notexample.org"))
         assertEquals(LinkPolicy.Decision.OPEN_THIRD_PARTY, decide("http", "auth.example.org"))
+    }
+
+    @Test
+    fun paymentStaysInsideAndOnlyAStepThatRefusesWebViewsGoesToASheet() {
+        // the company's checkout is a company domain
+        assertEquals(LinkPolicy.Decision.LOAD_INSIDE, decide("https", "pay.example.org"))
+        // a bank's or an operator's step met on the way (a redirect, nobody tapped) stays in the WebView
+        assertEquals(LinkPolicy.Decision.LOAD_INSIDE, decide("https", "acs.bank.example.net", tapped = false))
+        // a provider that refuses WebViews becomes an outside step, tapped or not
+        assertEquals(LinkPolicy.Decision.OUTSIDE_STEP, decide("https", "www.paypal.example", tapped = false))
+        assertEquals(LinkPolicy.Decision.OUTSIDE_STEP, decide("https", "paypal.example"))
     }
 
     @Test

@@ -52,6 +52,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import androidx.browser.customtabs.CustomTabColorSchemeParams
 import androidx.browser.customtabs.CustomTabsIntent
+import androidx.browser.auth.AuthTabIntent
 import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewCompat
 import net.openid.appauth.AuthorizationRequest
@@ -151,6 +152,14 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
         set(value) {
             forcedOfflineAt = if (value) SystemClock.elapsedRealtime() else 0L
         }
+
+    /** The outside step in Chrome's Auth Tab (or a Custom Tab), and the page's answer waiting for its return. */
+    private var outsideAnswer: ((JSONObject) -> Unit)? = null
+
+    private val outsideLauncher = AuthTabIntent.registerActivityResultLauncher(this) { result -> onOutsideReturn(result) }
+
+    /** When the page on screen came from the phone (for `network()`); null when it came from the network. */
+    private var shownKeptAt: Long? = null
 
     /** The sign-in running inside the app's WebView (its PKCE request), until the account service answers. */
     private var signInRequest: AuthorizationRequest? = null
@@ -448,6 +457,13 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
         val path = intent?.getStringExtra(EXTRA_PAGE_PATH)
         intent?.action = null
         intent?.removeExtra(EXTRA_PAGE_PATH)
+        // An outside step came back through the app's own https link (a browser without Auth Tab): into the WebView.
+        val back = intent?.dataString
+        val prefix = session.config.outsideReturnPrefix
+        if (action == Intent.ACTION_VIEW && back != null && prefix != null && back.startsWith(prefix)) {
+            intent?.data = null
+            return Ask.Page(back)
+        }
         return when (action) {
             ACTION_OPEN_PAGE -> Ask.Page(origin.pageUrl(path) ?: home())
             ACTION_SIGN_IN -> Ask.SignIn(origin.pageUrl(path) ?: home())
@@ -541,11 +557,21 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
         }
     }
 
-    private fun finishInAppSignIn(answer: Uri) {
+    private fun finishInAppSignIn(answer: Uri, told: ((JSONObject) -> Unit)? = null) {
         val request = signInRequest ?: return show(SignInScreen.FAILED)
         signInRequest = null
         show(SignInScreen.WORKING)
-        lifecycleScope.launch { signInDone(browser.finish(request, answer)) }
+        lifecycleScope.launch {
+            val outcome = browser.finish(request, answer)
+            told?.invoke(
+                when {
+                    outcome is BrowserSignIn.Outcome.Done && outcome.renewal == Renewal.RENEWED -> NativeBridge.ok()
+                    outcome is BrowserSignIn.Outcome.Done && outcome.renewal == Renewal.OFFLINE -> NativeBridge.refused("offline")
+                    else -> NativeBridge.refused("exchange_refused")
+                },
+            )
+            signInDone(outcome)
+        }
     }
 
     /** The FALLBACK: the account service's sign-in in a Custom Tab, while another company's login refuses the WebView. */
@@ -765,12 +791,25 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
     private fun onNetwork(online: Boolean) {
         if (!webViewAlive) return
         webView.setNetworkAvailable(online)
+        if (origin.matches(webView.url)) tellNetwork()
         if (!online) return
         forcedOffline = false
         when {
             errorView.isVisible && signInScreen == null -> retry()
             offlineBar.isVisible -> webView.reload()
         }
+    }
+
+    /** `network()`: `{online, offlinePage, savedAt}` - offline, and whether what is on screen came from the phone. */
+    private fun networkState(): JSONObject = JSONObject()
+        .put("online", !offline)
+        .put("offlinePage", shownKeptAt != null)
+        .put("savedAt", shownKeptAt ?: JSONObject.NULL)
+
+    /** The page hears it too: the window event `vougadev:network`, with what `network()` answers. */
+    private fun tellNetwork() {
+        if (!webViewAlive) return
+        webView.evaluateJavascript("window.dispatchEvent(new CustomEvent(\"vougadev:network\", {detail: ${networkState()}}));", null)
     }
 
     /** A same-origin GET answered from the phone, when offline: the page or file as it was kept, or null. */
@@ -865,7 +904,8 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
             }
             val isSite = origin.matches(uri)
             val screen = if (isSite) nativeScreen(uri.path) else null
-            return when (LinkPolicy.decide(uri.scheme, uri.host, isSite, screen != null, uri.path, session.config.companyDomains)) {
+            val tapped = request.hasGesture() && !request.isRedirect
+            return when (LinkPolicy.decide(uri.scheme, uri.host, isSite, screen != null, uri.path, session.config.companyDomains, session.config.outsideHosts, tapped)) {
                 LinkPolicy.Decision.LOAD_INSIDE -> false
                 LinkPolicy.Decision.SIGN_IN -> {
                     // NEVER SIGN IN IN THE WEBVIEW: the session is renewed, then the sign-in's `next` opens
@@ -885,6 +925,10 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
                 }
                 LinkPolicy.Decision.OPEN_THIRD_PARTY -> {
                     openThirdParty(uri)
+                    true
+                }
+                LinkPolicy.Decision.OUTSIDE_STEP -> {
+                    openOutsideStep(uri, null)
                     true
                 }
                 LinkPolicy.Decision.OPEN_APP -> {
@@ -938,6 +982,8 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
             } else {
                 offlineBar.visibility = View.GONE
             }
+            shownKeptAt = keptAt
+            if (origin.matches(url)) tellNetwork()
             val status = httpStatus.remove(key)
             val gateway = status != null && status >= 502
             if (!origin.matches(url)) {
@@ -995,6 +1041,44 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
             view.destroy()
             recreate()
             return true
+        }
+    }
+
+    /**
+     * AN OUTSIDE STEP that refuses WebViews (PayPal, a bank page that will not run inside): Chrome's Auth Tab over the
+     * app, watching for the return under [ShellConfig.outsideReturnPrefix] - reached, the tab closes and the return
+     * address loads in the WebView. A browser without Auth Tab opens a Custom Tab, and the return comes back as the
+     * app's own https link ([pageFrom]). [answer] is a page's `openOutside()` waiting, if any.
+     */
+    private fun openOutsideStep(url: Uri, answer: ((JSONObject) -> Unit)?) {
+        val back = session.config.outsideReturnPrefix?.toUri()
+        if (back == null || back.host == null) {
+            openThirdParty(url)
+            return answer?.invoke(NativeBridge.ok()) ?: Unit
+        }
+        outsideAnswer?.invoke(NativeBridge.refused("cancelled"))
+        outsideAnswer = answer
+        try {
+            AuthTabIntent.Builder().build().launch(outsideLauncher, url, back.host!!, back.path ?: "/")
+        } catch (_: ActivityNotFoundException) {
+            outsideAnswer = null
+            openThirdParty(url)
+            answer?.invoke(NativeBridge.ok())
+        }
+    }
+
+    private fun onOutsideReturn(result: AuthTabIntent.AuthResult) {
+        val answer = outsideAnswer
+        outsideAnswer = null
+        val prefix = session.config.outsideReturnPrefix
+        val back = result.resultUri?.toString()
+        if (result.resultCode == AuthTabIntent.RESULT_OK && back != null && prefix != null && back.startsWith(prefix)) {
+            answer?.invoke(NativeBridge.ok())
+            errorView.visibility = View.GONE
+            failedUrl = null
+            if (webViewAlive) webView.loadUrl(back)
+        } else {
+            answer?.invoke(NativeBridge.refused(if (result.resultCode == AuthTabIntent.RESULT_CANCELED) "cancelled" else "failed"))
         }
     }
 
@@ -1136,21 +1220,46 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
             val code = args?.optString("code").orEmpty()
             val state = args?.optString("state").orEmpty()
             val request = signInRequest
-            if (request == null || code.isBlank() || state != request.state) return@Method answer(NativeBridge.refused("no_sign_in"))
-            answer(NativeBridge.ok())
-            finishInAppSignIn(Uri.parse(session.config.redirectUri).buildUpon().appendQueryParameter("code", code).appendQueryParameter("state", state).build())
+            if (request == null || code.isBlank() || state != request.state) return@Method answer(NativeBridge.refused("invalid_state"))
+            val back = session.config.redirectUri.toUri().buildUpon().appendQueryParameter("code", code).appendQueryParameter("state", state).build()
+            finishInAppSignIn(back, answer)
         },
         "nativeSignIn" to NativeBridge.Method { args, answer ->
-            when (args?.optString("provider")) {
+            // `nativeSignIn("google")` or `nativeSignIn({provider: "google"})`
+            when (args?.optString("provider")?.ifEmpty { null } ?: args?.optString("value")) {
                 "google" -> {
                     val clientId = session.config.googleServerClientId ?: return@Method answer(NativeBridge.refused("unavailable"))
                     lifecycleScope.launch {
-                        val token = GoogleSignIn.idToken(this@ShellActivity, clientId)
-                        answer(if (token != null) NativeBridge.ok().put("provider", "google").put("idToken", token) else NativeBridge.refused("cancelled"))
+                        answer(
+                            when (val signed = GoogleSignIn.signIn(this@ShellActivity, clientId)) {
+                                is GoogleSignIn.Result.Signed -> NativeBridge.ok().put("provider", "google").put("idToken", signed.idToken)
+                                    .put("email", signed.email ?: JSONObject.NULL).put("name", signed.name ?: JSONObject.NULL)
+                                GoogleSignIn.Result.Cancelled -> NativeBridge.refused("cancelled")
+                                GoogleSignIn.Result.Failed -> NativeBridge.refused("failed")
+                            },
+                        )
                     }
                 }
-                else -> answer(NativeBridge.refused("unsupported"))
+                // Sign in with Apple is native on iOS only.
+                else -> answer(NativeBridge.refused("unavailable"))
             }
+        },
+    )
+
+    /**
+     * `openOutside({url, returnUrl})`, on the payment service's origin: an outside step that refuses WebViews, in an
+     * in-app sheet; it answers once the step came back under [ShellConfig.outsideReturnPrefix] (the return then loads
+     * in the WebView), or `{ok: false, error: "cancelled" | "failed" | "invalid_url"}`.
+     */
+    private fun outsideMethods(): Map<String, NativeBridge.Method> = linkedMapOf(
+        "openOutside" to NativeBridge.Method { args, answer ->
+            val url = args?.optString("url").orEmpty().toUri()
+            val back = args?.optString("returnUrl").orEmpty()
+            val prefix = session.config.outsideReturnPrefix
+            if (url.scheme != "https" || url.host.isNullOrBlank() || prefix == null || !back.startsWith(prefix)) {
+                return@Method answer(NativeBridge.refused("invalid_url"))
+            }
+            openOutsideStep(url, answer)
         },
     )
 
@@ -1161,6 +1270,7 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
             openSettings()
             answer(NativeBridge.ok())
         },
+        "network" to NativeBridge.Method { _, answer -> answer(networkState()) },
     )
 
     /**
@@ -1179,9 +1289,20 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
                 val bridge = NativeBridge(origin, methods)
                 val authMethods = signInMethods()
                 val authBridge = NativeBridge(auth, authMethods)
-                WebViewCompat.addWebMessageListener(webView, NativeShim.CHANNEL, rules + authRules) { _, message, sourceOrigin, _, replyProxy ->
+                // Other trusted company origins (the payment service, in its own frames too): the constants and openOutside.
+                val trusted = session.config.trustedOrigins.map(::AppOrigin)
+                val trustedRules = trusted.flatMap { NativeShim.originRules(it) }.toSet()
+                val trustedBridges = trusted.map { it to NativeBridge(it, outsideMethods()) }
+                WebViewCompat.addWebMessageListener(webView, NativeShim.CHANNEL, rules + authRules + trustedRules) { _, message, sourceOrigin, _, replyProxy ->
                     val source = sourceOrigin.toString()
-                    (if (auth.matches(source)) authBridge else bridge).onMessage(message.data, source) { reply -> replyProxy.postMessage(reply) }
+                    val target = when {
+                        auth.matches(source) -> authBridge
+                        else -> trustedBridges.firstOrNull { it.first.matches(source) }?.second ?: bridge
+                    }
+                    target.onMessage(message.data, source) { reply -> replyProxy.postMessage(reply) }
+                }
+                if (trustedRules.isNotEmpty()) {
+                    WebViewCompat.addDocumentStartJavaScript(webView, NativeShim.script(session.config.versionName, shell.features, outsideMethods().keys.toList()), trustedRules)
                 }
                 WebViewCompat.addDocumentStartJavaScript(webView, NativeShim.script(session.config.versionName, shell.features, methods.keys.toList()), rules)
                 WebViewCompat.addDocumentStartJavaScript(webView, NativeShim.script(session.config.versionName, emptyList(), authMethods.keys.toList()), authRules)
