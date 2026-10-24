@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Settings: the rows' section titles read the accent; here it is the app's primary colour, legible on its background. -->
+    <style name="ShellSettingsOverlay">
+        <item name="colorAccent">?attr/colorPrimary</item>
+    </style>
+</resources>

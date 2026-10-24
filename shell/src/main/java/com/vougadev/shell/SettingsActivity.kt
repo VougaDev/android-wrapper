@@ -32,6 +32,8 @@ import com.vougadev.shell.push.Push
 class SettingsActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Section titles in the theme's primary colour: its accent may be too light to read on the background.
+        theme.applyStyle(R.style.ShellSettingsOverlay, true)
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         setContentView(R.layout.shell_settings)
@@ -57,12 +59,16 @@ class SettingsActivity : AppCompatActivity() {
             val screen = preferenceManager.createPreferenceScreen(context)
             preferenceScreen = screen
 
-            if (Push.enabled(context)) {
+            // What the person receives (e-mail, SMS, Telegram, push) is chosen at the hub; this phone's own switch only
+            // when the app receives push.
+            val push = Push.enabled(context)
+            val choose = shell.config.notificationsPageUrl
+            if (push || choose != null) {
                 val group = category(R.string.shell_settings_notifications)
-                group.addPreference(row(getString(R.string.shell_settings_notifications_phone), notificationsSummary()) { openSystemNotifications() }.apply { key = KEY_PHONE })
-                shell.config.notificationsPageUrl?.let { url ->
-                    group.addPreference(row(getString(R.string.shell_settings_notifications_choose), null) { openOutside(url) })
+                if (push) {
+                    group.addPreference(row(getString(R.string.shell_settings_notifications_phone), notificationsSummary()) { openSystemNotifications() }.apply { key = KEY_PHONE })
                 }
+                choose?.let { url -> group.addPreference(row(getString(R.string.shell_settings_notifications_choose), null) { openOutside(url) }) }
             }
 
             shell.extensions.flatMap { it.settingsEntries(context) }.takeIf { it.isNotEmpty() }?.let { entries ->
