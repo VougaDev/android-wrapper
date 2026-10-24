@@ -22,6 +22,7 @@ import androidx.preference.PreferenceFragmentCompat
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.vougadev.shell.push.Push
+import com.vougadev.shell.web.LinkPolicy
 
 /**
  * THE APP'S NATIVE SETTINGS, reached from the account menu (`VougaDevNative.openSettings()`), never from the main menu:
@@ -128,9 +129,21 @@ class SettingsActivity : AppCompatActivity() {
             }
         }
 
-        /** Pages of the account service and the privacy policy open over the app, as the sign-in does. */
+        /**
+         * The privacy policy, the account's screens: a company address opens in the app's own WebView (one app, one
+         * WebView); anything else in an in-app browser sheet.
+         */
         private fun openOutside(url: String) {
             val context = requireContext()
+            if (LinkPolicy.isCompany(url.toUri().host, Shell.of(context).config.companyDomains) ||
+                Shell.of(context).session.origin.matches(url)
+            ) {
+                requireActivity().apply {
+                    setResult(RESULT_OPEN, Intent().putExtra(EXTRA_URL, url))
+                    finish()
+                }
+                return
+            }
             val colors = CustomTabColorSchemeParams.Builder()
                 .setToolbarColor(ContextCompat.getColor(context, R.color.shell_signin_background)).build()
             try {
@@ -160,6 +173,8 @@ class SettingsActivity : AppCompatActivity() {
 
     companion object {
         const val RESULT_SIGN_OUT = Activity.RESULT_FIRST_USER + 1
+        const val RESULT_OPEN = Activity.RESULT_FIRST_USER + 2
+        const val EXTRA_URL = "com.vougadev.shell.extra.URL"
         private const val KEY_PHONE = "notifications_phone"
     }
 }

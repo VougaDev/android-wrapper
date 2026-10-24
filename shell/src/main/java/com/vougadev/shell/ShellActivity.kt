@@ -50,11 +50,16 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+import androidx.browser.customtabs.CustomTabColorSchemeParams
+import androidx.browser.customtabs.CustomTabsIntent
+import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewCompat
+import net.openid.appauth.AuthorizationRequest
 import androidx.webkit.WebViewFeature
 import com.vougadev.shell.auth.AppSession
 import com.vougadev.shell.auth.BrowserSignIn
 import com.vougadev.shell.auth.Renewal
+import com.vougadev.shell.auth.GoogleSignIn
 import com.vougadev.shell.auth.SessionWatch
 import com.vougadev.shell.offline.Connectivity
 import com.vougadev.shell.offline.OfflineCapture
@@ -119,6 +124,7 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
     private lateinit var errorView: View
     private lateinit var errorTitle: TextView
     private lateinit var errorText: TextView
+    private lateinit var errorBack: Button
     private lateinit var offlineList: LinearLayout
     private lateinit var offlineBar: TextView
 
@@ -145,6 +151,12 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
         set(value) {
             forcedOfflineAt = if (value) SystemClock.elapsedRealtime() else 0L
         }
+
+    /** The sign-in running inside the app's WebView (its PKCE request), until the account service answers. */
+    private var signInRequest: AuthorizationRequest? = null
+
+    /** The main frame's HTTP status, per address, until the page has finished (WebView threads write). */
+    private val httpStatus = ConcurrentHashMap<String, Int>()
 
     /** No page of this start has loaded yet: a first load that fails for want of network opens the last page kept. */
     @Volatile
@@ -205,7 +217,15 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
     }
 
     private val settingsLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        if (result.resultCode == SettingsActivity.RESULT_SIGN_OUT) signOut()
+        when (result.resultCode) {
+            SettingsActivity.RESULT_SIGN_OUT -> signOut()
+            // The privacy policy, the account's screens: the company's own, in this same WebView.
+            SettingsActivity.RESULT_OPEN -> result.data?.getStringExtra(SettingsActivity.EXTRA_URL)?.let { url ->
+                errorView.visibility = View.GONE
+                failedUrl = null
+                if (webViewAlive) webView.loadUrl(url)
+            }
+        }
     }
 
     // --- File chooser (photos) ------------------------------------------------------------------------------
@@ -244,6 +264,12 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
         errorView = findViewById(R.id.error)
         errorTitle = findViewById(R.id.error_title)
         errorText = findViewById(R.id.error_text)
+        errorBack = findViewById(R.id.error_back)
+        errorBack.setOnClickListener {
+            errorView.visibility = View.GONE
+            failedUrl = null
+            if (webViewAlive && webView.canGoBack()) webView.goBack()
+        }
         offlineList = findViewById(R.id.offline_list)
         offlineBar = findViewById(R.id.offline_bar)
         findViewById<Button>(R.id.retry).setOnClickListener { retry() }
@@ -267,6 +293,17 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
             allowContentAccess = false
             mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
             userAgentString = userAgentString + AppHttp.userAgentSuffix(session.config.userAgentToken, session.config.versionName)
+        }
+        // PASSKEYS in the WebView, for the account domain that declares this app (its Digital Asset Links).
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_AUTHENTICATION)) {
+            WebSettingsCompat.setWebAuthenticationSupport(webView.settings, WebSettingsCompat.WEB_AUTHENTICATION_SUPPORT_FOR_APP)
+        }
+        signInRequest = savedInstanceState?.getString(KEY_SIGN_IN_REQUEST)?.let {
+            try {
+                AuthorizationRequest.jsonDeserialize(it)
+            } catch (_: org.json.JSONException) {
+                null
+            }
         }
         webView.webViewClient = ShellClient()
         webView.webChromeClient = ShellChrome()
@@ -305,6 +342,11 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
                     when {
                         ModalBack.closedAModal(result) -> Unit
                         webView.canGoBack() -> webView.goBack()
+                        // Back out of the sign-in inside the app: its screen again.
+                        signInRequest != null -> {
+                            signInRequest = null
+                            show(SignInScreen.SIGN_IN)
+                        }
                         else -> leaveOnBack()
                     }
                 }
@@ -376,6 +418,7 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         if (webViewAlive) webView.saveState(outState)
+        signInRequest?.let { outState.putString(KEY_SIGN_IN_REQUEST, it.jsonSerializeString()) }
     }
 
     override fun onDestroy() {
@@ -444,7 +487,7 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
 
     private fun onSignInButton() = when (signInScreen) {
         SignInScreen.OFFLINE -> renewThen(afterSignIn)
-        SignInScreen.SIGN_IN, SignInScreen.FAILED, SignInScreen.NO_BROWSER -> startBrowserSignIn()
+        SignInScreen.SIGN_IN, SignInScreen.FAILED, SignInScreen.NO_BROWSER -> startInAppSignIn()
         else -> Unit
     }
 
@@ -482,8 +525,32 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
         }
     }
 
-    /** One button: the account service's sign-in in a Custom Tab. */
+    /**
+     * SIGN-IN INSIDE THE APP: the account service's sign-in loads in this WebView (one app, one WebView). It ends with
+     * the account service's answer - its redirect to the app's address, or its call `completeSignIn({code, state})` -
+     * traded for the app's tokens ([finishInAppSignIn]).
+     */
+    private fun startInAppSignIn() {
+        show(SignInScreen.WORKING)
+        lifecycleScope.launch {
+            val request = browser.request() ?: return@launch show(SignInScreen.OFFLINE)
+            signInRequest = request
+            hideSignIn()
+            errorView.visibility = View.GONE
+            if (webViewAlive) webView.loadUrl(request.toUri().toString())
+        }
+    }
+
+    private fun finishInAppSignIn(answer: Uri) {
+        val request = signInRequest ?: return show(SignInScreen.FAILED)
+        signInRequest = null
+        show(SignInScreen.WORKING)
+        lifecycleScope.launch { signInDone(browser.finish(request, answer)) }
+    }
+
+    /** The FALLBACK: the account service's sign-in in a Custom Tab, while another company's login refuses the WebView. */
     private fun startBrowserSignIn() {
+        signInRequest = null
         show(SignInScreen.WORKING)
         lifecycleScope.launch {
             val intent = try {
@@ -501,7 +568,11 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
 
     private suspend fun finishBrowserSignIn(data: Intent?) {
         show(SignInScreen.WORKING)
-        when (val outcome = browser.finish(data)) {
+        signInDone(browser.finish(data))
+    }
+
+    private fun signInDone(outcome: BrowserSignIn.Outcome) {
+        when (outcome) {
             BrowserSignIn.Outcome.Cancelled -> show(SignInScreen.SIGN_IN)
             BrowserSignIn.Outcome.Failed -> show(SignInScreen.FAILED)
             is BrowserSignIn.Outcome.Done -> when (outcome.renewal) {
@@ -610,6 +681,9 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
 
     /** A page by URL: a native screen opens over the home page; anything else loads here. */
     private fun open(url: String) {
+        // What was asked replaces any error screen up.
+        errorView.visibility = View.GONE
+        failedUrl = null
         val uri = url.toUri()
         val screen = if (origin.matches(uri)) nativeScreen(uri.path) else null
         if (screen == null) {
@@ -633,6 +707,50 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
         val url = failedUrl ?: (origin.baseUrl + "/")
         failedUrl = null
         webView.loadUrl(url)
+    }
+
+    /** A page of the site, as the site served it (or the phone kept it): kept for offline, and the session watched. */
+    private fun siteFinished(url: String, keptAt: Long?) {
+        if (failedUrl == null) firstPageOfStart = false
+        val siteSession = SessionCookies.isSignedIn(CookieManager.getInstance().getCookie(origin.baseUrl))
+        // Loaded from the network: kept for offline, with the files it used - only as the person sees it (a page the
+        // site sent while dropping the session is renewed below, never kept).
+        if (keptAt == null && !offline && failedUrl == null && (siteSession || !session.signedIn)) {
+            val files = pageFiles.toList()
+            lifecycleScope.launch { capture.capture(url, files) }
+        }
+        when {
+            siteSession -> onSignedInPage()
+            // The site dropped the session (its access token expired) while this phone is signed in: renewed
+            // silently, then this page again - never an anonymous page for a signed-in person ([SessionWatch]).
+            sessionWatch.shouldRenew(session.signedIn, false, signInScreen != null || signingOut || offline, SystemClock.elapsedRealtime()) -> {
+                Log.i(TAG, "The site dropped the session: renewed, then the page again")
+                renewThen(url)
+            }
+        }
+    }
+
+    /**
+     * NEVER A RAW ERROR PAGE: an answer that is not the site's own (a 502, 503 or 504 from the edge, a CDN's or a
+     * proxy's page, a page without [ShellConfig.pageMarker]). Treated as offline: the copy kept on the phone - or, as the
+     * app starts, the last one kept - with the native bar; else the native screen with what is available.
+     */
+    private fun foreignPage(url: String, status: Int?) {
+        val serverDown = status == null || status >= 500
+        if (serverDown) forcedOffline = true
+        val kept = when {
+            !serverDown -> null
+            shell.pages.savedAt(url) != null -> url
+            firstPageOfStart -> shell.pages.pages().firstOrNull()?.url
+            else -> null
+        }
+        if (kept != null) {
+            failedUrl = null
+            webView.loadUrl(kept)
+            return
+        }
+        failedUrl = url
+        showUnavailable(url)
     }
 
     // --- Offline ------------------------------------------------------------------------------------------------------
@@ -674,15 +792,19 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
     private fun showUnavailable(url: String) {
         offlineBar.visibility = View.GONE
         offlineList.removeAllViews()
+        errorBack.isVisible = webViewAlive && webView.canGoBack()
+        val key = PageCache.keyOf(url)
+        val pages = shell.pages.pages().filter { it.url != key }.take(MAX_OFFLINE_ROWS)
+        val entries = shell.extensions.flatMap { it.offlineEntries(this) }
         if (!offline) {
             errorTitle.setText(R.string.shell_load_error_title)
-            errorText.setText(R.string.shell_load_error_text)
+            errorText.text = if (pages.isEmpty() && entries.isEmpty()) getString(R.string.shell_load_error_text)
+            else getString(R.string.shell_load_error_text) + "\n" + getString(R.string.shell_load_error_list)
         } else {
-            val key = PageCache.keyOf(url)
-            val pages = shell.pages.pages().filter { it.url != key }.take(MAX_OFFLINE_ROWS)
-            val entries = shell.extensions.flatMap { it.offlineEntries(this) }
             errorTitle.setText(R.string.shell_offline_title)
             errorText.setText(if (pages.isEmpty() && entries.isEmpty()) R.string.shell_offline_nothing else R.string.shell_offline_text)
+        }
+        run {
             entries.forEach { entry -> offlineList.addView(offlineRow(entry.title, null) { entry.open(this) }) }
             pages.forEach { page ->
                 val title = page.title ?: (PushRoute.pathOf(page.url) ?: page.url)
@@ -736,9 +858,14 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
             // Frames inside a page navigate within themselves; only the top level is policed.
             if (!request.isForMainFrame) return false
             val uri = request.url
+            // The account service's answer to the sign-in inside the app: its redirect to the app's own address.
+            if (uri.toString().startsWith(session.config.redirectUri)) {
+                finishInAppSignIn(uri)
+                return true
+            }
             val isSite = origin.matches(uri)
             val screen = if (isSite) nativeScreen(uri.path) else null
-            return when (LinkPolicy.decide(uri.scheme, isSite, auth.matches(uri), screen != null, uri.path, session.config.authSignInPaths)) {
+            return when (LinkPolicy.decide(uri.scheme, uri.host, isSite, screen != null, uri.path, session.config.companyDomains)) {
                 LinkPolicy.Decision.LOAD_INSIDE -> false
                 LinkPolicy.Decision.SIGN_IN -> {
                     // NEVER SIGN IN IN THE WEBVIEW: the session is renewed, then the sign-in's `next` opens
@@ -751,7 +878,16 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
                     startActivity(screen!!)
                     true
                 }
-                LinkPolicy.Decision.OPEN_OUTSIDE -> {
+                // Another company's login refuses a WebView: the sign-in in the system's surface instead.
+                LinkPolicy.Decision.SIGN_IN_ELSEWHERE -> {
+                    if (signInRequest != null || !session.signedIn) startBrowserSignIn() else openThirdParty(uri)
+                    true
+                }
+                LinkPolicy.Decision.OPEN_THIRD_PARTY -> {
+                    openThirdParty(uri)
+                    true
+                }
+                LinkPolicy.Decision.OPEN_APP -> {
                     openOutside(uri)
                     true
                 }
@@ -793,31 +929,36 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
 
         override fun onPageFinished(view: WebView, url: String?) {
             pull.isRefreshing = false
-            if (!origin.matches(url)) return
-            if (failedUrl == null) firstPageOfStart = false
-            val siteSession = SessionCookies.isSignedIn(CookieManager.getInstance().getCookie(origin.baseUrl))
-            val keptAt = url?.let { servedFromPhone[PageCache.keyOf(it)] }
+            if (url == null) return
+            val key = PageCache.keyOf(url)
+            val keptAt = servedFromPhone[key]
             if (keptAt != null) {
                 offlineBar.text = getString(R.string.shell_offline_bar, time(keptAt))
                 offlineBar.visibility = View.VISIBLE
             } else {
                 offlineBar.visibility = View.GONE
-                // Loaded from the network: kept for offline, with the files it used - only as the person sees it (a
-                // page the site sent while dropping the session is renewed below, never kept).
-                if (!offline && failedUrl == null && url != null && (siteSession || !session.signedIn)) {
-                    val files = pageFiles.toList()
-                    lifecycleScope.launch { capture.capture(url, files) }
-                }
             }
+            val status = httpStatus.remove(key)
+            val gateway = status != null && status >= 502
+            if (!origin.matches(url)) {
+                // A company page the edge could not serve: never the raw error.
+                if (gateway && keptAt == null && failedUrl == null) foreignPage(url, status)
+                return
+            }
+            val marker = session.config.pageMarker
             when {
-                siteSession -> onSignedInPage()
-                // The site dropped the session (its access token expired) while this phone is signed in: renewed
-                // silently, then this page again - never an anonymous page for a signed-in person ([SessionWatch]).
-                sessionWatch.shouldRenew(session.signedIn, false, signInScreen != null || signingOut || offline, SystemClock.elapsedRealtime()) -> {
-                    Log.i(TAG, "The site dropped the session: renewed, then the page again")
-                    renewThen(url)
+                keptAt != null -> siteFinished(url, keptAt)
+                // NEVER A RAW ERROR PAGE: a page without the site's own markup is an edge's, a proxy's or a CDN's.
+                marker != null -> view.evaluateJavascript("document.querySelector(${JSONObject.quote(marker)}) !== null") { found ->
+                    if (found == "false" && failedUrl == null) foreignPage(url, status) else siteFinished(url, null)
                 }
+                gateway && failedUrl == null -> foreignPage(url, status)
+                else -> siteFinished(url, null)
             }
+        }
+
+        override fun onReceivedHttpError(view: WebView, request: WebResourceRequest, errorResponse: WebResourceResponse) {
+            if (request.isForMainFrame) httpStatus[PageCache.keyOf(request.url.toString())] = errorResponse.statusCode
         }
 
         override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
@@ -854,6 +995,16 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
             view.destroy()
             recreate()
             return true
+        }
+    }
+
+    /** A third party's site (a checkout, a map): an in-app browser sheet over the app, in its colours. */
+    private fun openThirdParty(uri: Uri) {
+        val colors = CustomTabColorSchemeParams.Builder().setToolbarColor(ContextCompat.getColor(this, R.color.shell_signin_background)).build()
+        try {
+            CustomTabsIntent.Builder().setDefaultColorSchemeParams(colors).setShowTitle(true).build().launchUrl(this, uri)
+        } catch (_: ActivityNotFoundException) {
+            openOutside(uri)
         }
     }
 
@@ -975,6 +1126,34 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
 
     // --- window.VougaDevNative ---------------------------------------------------------------------------------------
 
+    /**
+     * THE ACCOUNT SERVICE'S MEMBERS, on its origin only: `completeSignIn({code, state})` ends the sign-in inside the app
+     * (the shell trades the code for the app's tokens), and `nativeSignIn({provider})` signs in with another company's
+     * own sign-in, which refuses a WebView - Google through Android's Credential Manager; Apple is not offered on Android.
+     */
+    private fun signInMethods(): Map<String, NativeBridge.Method> = linkedMapOf(
+        "completeSignIn" to NativeBridge.Method { args, answer ->
+            val code = args?.optString("code").orEmpty()
+            val state = args?.optString("state").orEmpty()
+            val request = signInRequest
+            if (request == null || code.isBlank() || state != request.state) return@Method answer(NativeBridge.refused("no_sign_in"))
+            answer(NativeBridge.ok())
+            finishInAppSignIn(Uri.parse(session.config.redirectUri).buildUpon().appendQueryParameter("code", code).appendQueryParameter("state", state).build())
+        },
+        "nativeSignIn" to NativeBridge.Method { args, answer ->
+            when (args?.optString("provider")) {
+                "google" -> {
+                    val clientId = session.config.googleServerClientId ?: return@Method answer(NativeBridge.refused("unavailable"))
+                    lifecycleScope.launch {
+                        val token = GoogleSignIn.idToken(this@ShellActivity, clientId)
+                        answer(if (token != null) NativeBridge.ok().put("provider", "google").put("idToken", token) else NativeBridge.refused("cancelled"))
+                    }
+                }
+                else -> answer(NativeBridge.refused("unsupported"))
+            }
+        },
+    )
+
     /** The core's Promise members, in every app: the consent choices, and the native Settings screen. */
     private fun coreMethods(): Map<String, NativeBridge.Method> = linkedMapOf(
         "consent" to NativeBridge.Method { _, answer -> answer(JSONObject(Consent.choices(this).toMap())) },
@@ -993,13 +1172,19 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
         // Nested positive checks: the RequiresFeature lint reads one condition per `if`.
         if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
             if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+                // The app's own origin gets the whole bridge; the account service's, only what its sign-in needs.
                 val rules = NativeShim.originRules(origin)
+                val authRules = NativeShim.originRules(auth)
                 val methods = coreMethods() + attachments.flatMap { it.bridgeMethods().entries }.associate { it.key to it.value }
                 val bridge = NativeBridge(origin, methods)
-                WebViewCompat.addWebMessageListener(webView, NativeShim.CHANNEL, rules) { _, message, sourceOrigin, _, replyProxy ->
-                    bridge.onMessage(message.data, sourceOrigin.toString()) { reply -> replyProxy.postMessage(reply) }
+                val authMethods = signInMethods()
+                val authBridge = NativeBridge(auth, authMethods)
+                WebViewCompat.addWebMessageListener(webView, NativeShim.CHANNEL, rules + authRules) { _, message, sourceOrigin, _, replyProxy ->
+                    val source = sourceOrigin.toString()
+                    (if (auth.matches(source)) authBridge else bridge).onMessage(message.data, source) { reply -> replyProxy.postMessage(reply) }
                 }
                 WebViewCompat.addDocumentStartJavaScript(webView, NativeShim.script(session.config.versionName, shell.features, methods.keys.toList()), rules)
+                WebViewCompat.addDocumentStartJavaScript(webView, NativeShim.script(session.config.versionName, emptyList(), authMethods.keys.toList()), authRules)
                 return
             }
         }
@@ -1022,6 +1207,7 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
         private const val CAPTURES_DIR = "captures"
         private const val KEY_ASKED = "asked"
         private const val MAX_OFFLINE_ROWS = 8
+        private const val KEY_SIGN_IN_REQUEST = "shell_sign_in_request"
         private const val FORCED_OFFLINE_MS = 30_000L
         private val NETWORK_ERRORS = setOf(
             WebViewClient.ERROR_HOST_LOOKUP, WebViewClient.ERROR_CONNECT, WebViewClient.ERROR_TIMEOUT,

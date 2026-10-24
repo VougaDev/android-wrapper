@@ -40,6 +40,10 @@ dependencies {
     implementation(libs.appauth)
     // The native Settings screen, and the account service's pages opened over the app.
     implementation(libs.androidx.preference)
+    // Sign in with Google natively, for the account service's page (Google refuses a WebView).
+    implementation(libs.androidx.credentials)
+    implementation(libs.androidx.credentials.play)
+    implementation(libs.googleid)
     implementation(libs.androidx.browser)
     // Push from the notification hub: inert unless the app was built with its Firebase file.
     implementation(platform(libs.firebase.bom))

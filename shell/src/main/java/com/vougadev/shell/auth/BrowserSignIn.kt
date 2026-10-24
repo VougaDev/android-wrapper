@@ -2,6 +2,7 @@ package com.vougadev.shell.auth
 
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import androidx.browser.customtabs.CustomTabColorSchemeParams
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
@@ -18,8 +19,10 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 
 /**
- * SIGN-IN IN THE SYSTEM BROWSER (a Custom Tab), never in the WebView: AppAuth's authorization code flow with PKCE S256
- * for the app's public client, then its code exchange (which checks the ID token). The tokens go to [SessionKeeper].
+ * THE APP'S SIGN-IN with the account service: AppAuth's authorization code flow with PKCE S256 for the app's public
+ * client, then its code exchange (which checks the ID token); the tokens go to [SessionKeeper]. It runs INSIDE THE APP,
+ * in its WebView ([request], [finish] with the account service's answer); a Custom Tab ([intent]) only when another
+ * company's login refuses a WebView, until the account service hands those logins to the app.
  *
  * One per activity: AppAuth's service binds the Custom Tabs service and is [dispose]d with the activity.
  */
@@ -37,19 +40,43 @@ class BrowserSignIn(private val context: Context, private val session: AppSessio
         data object Failed : Outcome
     }
 
-    /** The intent that opens the account service's sign-in in a Custom Tab; null when the account service's discovery cannot be read (offline). */
-    suspend fun intent(): Intent? {
+    /**
+     * THE SIGN-IN INSIDE THE APP: the account service's authorization request (code + PKCE S256, the app's public client),
+     * whose address the WebView loads. Null when the account service's discovery cannot be read (offline).
+     */
+    suspend fun request(): AuthorizationRequest? {
         val discovery = session.discovery() ?: return null
         val config = try {
             AuthorizationServiceConfiguration(AuthorizationServiceDiscovery(discovery.json))
         } catch (_: AuthorizationServiceDiscovery.MissingArgumentException) {
             return null
         }
-        val request = AuthorizationRequest.Builder(config, session.client.clientId, ResponseTypeValues.CODE, session.client.redirectUri.toUri())
+        return AuthorizationRequest.Builder(config, session.client.clientId, ResponseTypeValues.CODE, session.client.redirectUri.toUri())
             .setScope(session.config.scopes)
-            // the account service's pages in the phone's language, as the web's own sign-in asks
+            // the account service's screens in the phone's language, as the web's own sign-in asks
             .setUiLocales(Locale.getDefault().language)
             .build()
+    }
+
+    /**
+     * The account service answered the sign-in inside the app: its redirect to the app's address, or its call
+     * `completeSignIn({code, state})`, as [answer] (`<redirect>?code=…&state=…`). The state must be [request]'s; the code
+     * is exchanged (PKCE) and the session opened.
+     */
+    suspend fun finish(request: AuthorizationRequest, answer: Uri): Outcome {
+        if (answer.getQueryParameter("error") != null) return Outcome.Cancelled
+        if (answer.getQueryParameter("state") != request.state || answer.getQueryParameter("code").isNullOrBlank()) return Outcome.Failed
+        val response = try {
+            AuthorizationResponse.Builder(request).fromUri(answer).build()
+        } catch (_: IllegalArgumentException) {
+            return Outcome.Failed
+        }
+        return exchange(response)
+    }
+
+    /** The FALLBACK while another company's login refuses the WebView: the sign-in in a Custom Tab, in the app's colours. */
+    suspend fun intent(): Intent? {
+        val request = request() ?: return null
         val tab = service.createCustomTabsIntentBuilder(request.toUri())
             .setDefaultColorSchemeParams(CustomTabColorSchemeParams.Builder().setToolbarColor(ContextCompat.getColor(context, R.color.shell_signin_background)).build())
             .setShowTitle(true)
@@ -65,6 +92,10 @@ class BrowserSignIn(private val context: Context, private val session: AppSessio
             val cancelled = error == null || error.code in CANCELLED
             return if (cancelled) Outcome.Cancelled else Outcome.Failed
         }
+        return exchange(response)
+    }
+
+    private suspend fun exchange(response: AuthorizationResponse): Outcome {
         val tokens = suspendCoroutine { done ->
             service.performTokenRequest(response.createTokenExchangeRequest()) { answer, _ -> done.resume(answer) }
         }

@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="shell_load_error_title">La page n\'a pas pu être chargée</string>
-    <string name="shell_load_error_text">Veuillez vérifier la connexion et réessayer.</string>
+    <string name="shell_load_error_title">Indisponible pour le moment</string>
+    <string name="shell_load_error_text">Le service ne répond pas pour le moment.</string>
     <string name="shell_load_error_retry">Réessayer</string>
-    <string name="shell_no_app_for_link">Aucune application de ce téléphone ne peut ouvrir ce lien.</string>
+    <string name="shell_no_app_for_link">Aucune application de ce téléphone ne peut l\'ouvrir.</string>
     <string name="shell_signin_text">Connectez-vous avec votre compte VougaDev pour continuer.</string>
     <string name="shell_signin_button">Se connecter avec VougaDev</string>
     <string name="shell_signin_working">Ouverture de votre session…</string>
     <string name="shell_signin_failed">La connexion n\'a pas pu aboutir. Veuillez réessayer.</string>
     <string name="shell_signin_offline">Aucune connexion : votre session n\'a pas pu être ouverte. Veuillez vérifier le réseau et réessayer.</string>
-    <string name="shell_signin_no_browser">Un navigateur web est nécessaire pour se connecter. Veuillez en installer ou en activer un, puis réessayer.</string>
+    <string name="shell_signin_no_browser">La connexion nécessite Chrome ou une autre application compatible. Veuillez en installer ou en activer une, puis réessayer.</string>
     <string name="shell_signing_out">Déconnexion en cours…</string>
     <string name="shell_file_chooser_title">Choisir une photo</string>
     <string name="shell_cancel">Annuler</string>
@@ -37,9 +37,10 @@
     <string name="shell_settings_sign_out_text">Se déconnecter de %1$s sur ce téléphone ?</string>
     <string name="shell_settings_about">À propos</string>
     <string name="shell_settings_version">Version</string>
-    <string name="shell_offline_bar">Hors ligne · mis à jour à %1$s</string>
-    <string name="shell_offline_title">Cette page n\'est pas disponible hors ligne</string>
-    <string name="shell_offline_text">Voici ce que vous pouvez consulter sans connexion :</string>
-    <string name="shell_offline_nothing">Les pages que vous consultez resteront disponibles ici sans connexion.</string>
+    <string name="shell_offline_bar">Hors connexion · mis à jour à %1$s</string>
+    <string name="shell_offline_title">Hors connexion</string>
+    <string name="shell_offline_text">Pas encore enregistré sur ce téléphone. Disponible sans connexion :</string>
+    <string name="shell_offline_nothing">Pas encore enregistré sur ce téléphone. Ce que vous consultez avec une connexion reste disponible ici.</string>
     <string name="shell_offline_saved_at">Mise à jour à %1$s</string>
+    <string name="shell_load_error_list">Disponible sur ce téléphone :</string>
 </resources>

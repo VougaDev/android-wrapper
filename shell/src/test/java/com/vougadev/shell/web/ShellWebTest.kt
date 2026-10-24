@@ -10,23 +10,43 @@ class ShellWebTest {
 
     private val site = AppOrigin("https://app.example.org")
 
+    private val company = listOf("example.org")
+
+    private fun decide(scheme: String?, host: String?, isSite: Boolean = false, native: Boolean = false) =
+        LinkPolicy.decide(scheme, host, isSite, native, path = "/", companyDomains = company)
+
     @Test
     fun theLinkPolicyHandsNativeRoutesToTheApp() {
-        assertEquals(LinkPolicy.Decision.OPEN_NATIVE, LinkPolicy.decide("https", isSite = true, isAuth = false, isNativeRoute = true))
-        assertEquals(LinkPolicy.Decision.LOAD_INSIDE, LinkPolicy.decide("https", isSite = true, isAuth = false, isNativeRoute = false))
+        assertEquals(LinkPolicy.Decision.OPEN_NATIVE, decide("https", "app.example.org", isSite = true, native = true))
+        assertEquals(LinkPolicy.Decision.LOAD_INSIDE, decide("https", "app.example.org", isSite = true))
     }
 
     @Test
-    fun onlyTheSiteLoadsInsideAndEverythingElseLeaves() {
-        // the account service's pages other than its sign-in open in the browser (SignInRouteTest); never in the WebView
-        assertEquals(LinkPolicy.Decision.OPEN_OUTSIDE, LinkPolicy.decide("https", isSite = false, isAuth = true, isNativeRoute = false))
+    fun oneAppOneWebViewForEveryCompanyDomain() {
+        // the account service, the company's other domains and subdomains: inside, never the browser
+        assertEquals(LinkPolicy.Decision.LOAD_INSIDE, decide("https", "auth.example.org"))
+        assertEquals(LinkPolicy.Decision.LOAD_INSIDE, decide("https", "example.org"))
+        assertEquals(LinkPolicy.Decision.LOAD_INSIDE, decide("https", "Help.Example.org"))
         // a native route on the account service's host is not the site's
-        assertEquals(LinkPolicy.Decision.OPEN_OUTSIDE, LinkPolicy.decide("https", isSite = false, isAuth = true, isNativeRoute = true))
-        assertEquals(LinkPolicy.Decision.OPEN_OUTSIDE, LinkPolicy.decide("https", isSite = false, isAuth = false, isNativeRoute = false))
-        assertEquals(LinkPolicy.Decision.OPEN_OUTSIDE, LinkPolicy.decide("tel", isSite = false, isAuth = false, isNativeRoute = false))
-        assertEquals(LinkPolicy.Decision.OPEN_INTENT, LinkPolicy.decide("intent", isSite = false, isAuth = false, isNativeRoute = false))
-        assertEquals(LinkPolicy.Decision.BLOCK, LinkPolicy.decide("javascript", isSite = false, isAuth = false, isNativeRoute = false))
-        assertEquals(LinkPolicy.Decision.BLOCK, LinkPolicy.decide(null, isSite = false, isAuth = false, isNativeRoute = false))
+        assertEquals(LinkPolicy.Decision.LOAD_INSIDE, decide("https", "auth.example.org", native = true))
+        // look-alikes and plain http are not the company
+        assertEquals(LinkPolicy.Decision.OPEN_THIRD_PARTY, decide("https", "example.org.evil.io"))
+        assertEquals(LinkPolicy.Decision.OPEN_THIRD_PARTY, decide("https", "notexample.org"))
+        assertEquals(LinkPolicy.Decision.OPEN_THIRD_PARTY, decide("http", "auth.example.org"))
+    }
+
+    @Test
+    fun onlyThirdPartiesAndThePhonesAppsLeave() {
+        assertEquals(LinkPolicy.Decision.OPEN_THIRD_PARTY, decide("https", "checkout.payments.example.net"))
+        assertEquals(LinkPolicy.Decision.SIGN_IN_ELSEWHERE, decide("https", "accounts.google.com"))
+        assertEquals(LinkPolicy.Decision.SIGN_IN_ELSEWHERE, decide("https", "appleid.apple.com"))
+        assertEquals(LinkPolicy.Decision.OPEN_APP, decide("tel", null))
+        assertEquals(LinkPolicy.Decision.OPEN_APP, decide("mailto", null))
+        assertEquals(LinkPolicy.Decision.OPEN_APP, decide("geo", null))
+        assertEquals(LinkPolicy.Decision.OPEN_APP, decide("whatsapp", null))
+        assertEquals(LinkPolicy.Decision.OPEN_INTENT, decide("intent", null))
+        assertEquals(LinkPolicy.Decision.BLOCK, decide("javascript", null))
+        assertEquals(LinkPolicy.Decision.BLOCK, decide(null, null))
     }
 
     @Test

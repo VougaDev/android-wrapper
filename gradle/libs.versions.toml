@@ -17,6 +17,8 @@ preference = "1.2.1"
 browser = "1.9.0"
 # Push: compiled in, started only when the app was built with its Firebase file (never in this repository).
 firebaseBom = "34.19.0"
+credentials = "1.5.0"
+googleid = "1.1.1"
 # Test only: android.jar's org.json is a stub that throws on the JVM.
 orgJson = "20260814"
 
@@ -35,6 +37,9 @@ androidx-preference = { group = "androidx.preference", name = "preference-ktx", 
 androidx-browser = { group = "androidx.browser", name = "browser", version.ref = "browser" }
 firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBom" }
 firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging" }
+androidx-credentials = { group = "androidx.credentials", name = "credentials", version.ref = "credentials" }
+androidx-credentials-play = { group = "androidx.credentials", name = "credentials-play-services-auth", version.ref = "credentials" }
+googleid = { group = "com.google.android.libraries.identity.googleid", name = "googleid", version.ref = "googleid" }
 org-json = { group = "org.json", name = "json", version.ref = "orgJson" }
 
 [plugins]

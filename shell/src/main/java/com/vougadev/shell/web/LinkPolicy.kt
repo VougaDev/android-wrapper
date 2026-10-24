@@ -3,25 +3,33 @@ package com.vougadev.shell.web
 import java.util.Locale
 
 /**
- * Where a top-level navigation goes. The WebView shows the site and nothing else: SIGN-IN NEVER HAPPENS IN IT (the account service's rule:
- * Google and passkeys refuse a WebView), so the site's `/auth/login/` and the account service's sign-in pages run the app's own sign-in
- * instead ([SignInRoute]); the account service's other pages (the account) open in the browser, where the VougaDev session lives. A
- * person who taps an address, a phone number or a map link gets the app that handles it.
+ * Where a top-level navigation goes. ONE APP, ONE WEBVIEW: the app's site, the company's other domains and subdomains,
+ * and the account service's pages (its sign-in included) all load in the same WebView, with one navigation and the
+ * native back - never the browser, never a separate screen. The site's own sign-in address renews the session instead
+ * ([SignInRoute]). Logins of other companies refuse a WebView: they finish in the system's sign-in surface. A third
+ * party's site (a checkout, a map) opens in an in-app browser sheet; a phone number, an e-mail, a map or a chat opens
+ * the phone's own app. Pure, tested on the JVM.
  */
 object LinkPolicy {
 
     enum class Decision {
-        /** A page of the site: load it in the WebView. */
+        /** The app's site or a company domain: load it in the WebView. */
         LOAD_INSIDE,
 
-        /** A path the app shows natively (its `ShellActivity.nativeScreen`): that screen opens instead. */
+        /** A path the app shows natively (an extension's `nativeScreen`): that screen opens instead. */
         OPEN_NATIVE,
 
-        /** The site's or the account service's sign-in: the session is renewed, or the native sign-in screen shown. */
+        /** The site's own sign-in address: the session is renewed, or the sign-in screen shown. */
         SIGN_IN,
 
-        /** Another web host (the account service's account pages too), `tel:`, `geo:`, `mailto:`, a maps or chat app: ACTION_VIEW. */
-        OPEN_OUTSIDE,
+        /** Another company's login (Google, Apple), which refuses a WebView: the sign-in in the system's surface. */
+        SIGN_IN_ELSEWHERE,
+
+        /** A third party's site: an in-app browser sheet (Custom Tab) over the app. */
+        OPEN_THIRD_PARTY,
+
+        /** `tel:`, `mailto:`, `geo:`, a maps or chat app's scheme: the phone's own app. */
+        OPEN_APP,
 
         /** An `intent:` URL: parsed, stripped of any explicit component, then started. */
         OPEN_INTENT,
@@ -32,36 +40,48 @@ object LinkPolicy {
 
     private val BLOCKED = setOf("file", "content", "javascript", "data", "blob", "about", "chrome", "android-app")
 
-    /**
-     * [path] is the URL's path (no query); it decides between the site's pages and sign-in. [authSignIn] are the account service's
-     * sign-in paths, the app's ([com.vougadev.shell.ShellConfig.authSignInPaths]).
-     */
+    /** Logins of other companies that refuse an embedded WebView. */
+    val SIGN_IN_ELSEWHERE_HOSTS = setOf("accounts.google.com", "appleid.apple.com")
+
+    /** [path] is the URL's path (no query); [companyDomains] the app's ([com.vougadev.shell.ShellConfig.companyDomains]). */
     fun decide(
         scheme: String?,
+        host: String?,
         isSite: Boolean,
-        isAuth: Boolean,
         isNativeRoute: Boolean,
         path: String? = null,
-        authSignIn: List<String> = emptyList(),
+        companyDomains: List<String> = emptyList(),
     ): Decision {
         val s = scheme?.lowercase(Locale.ROOT) ?: return Decision.BLOCK
+        val web = s == "https" || s == "http"
+        val h = host?.lowercase(Locale.ROOT)
         return when {
             isSite && SignInRoute.isSiteSignIn(path) -> Decision.SIGN_IN
-            isAuth && SignInRoute.isAuthSignIn(path, authSignIn) -> Decision.SIGN_IN
             isSite && isNativeRoute -> Decision.OPEN_NATIVE
             isSite -> Decision.LOAD_INSIDE
+            s == "https" && isCompany(h, companyDomains) -> Decision.LOAD_INSIDE
+            web && h in SIGN_IN_ELSEWHERE_HOSTS -> Decision.SIGN_IN_ELSEWHERE
+            web -> Decision.OPEN_THIRD_PARTY
             s == "intent" -> Decision.OPEN_INTENT
             s in BLOCKED -> Decision.BLOCK
-            else -> Decision.OPEN_OUTSIDE
+            else -> Decision.OPEN_APP
+        }
+    }
+
+    /** A company domain or one of its subdomains: `vougadev.com`, `<sign-in domain>` - never `vougadev.com.evil.io`. */
+    fun isCompany(host: String?, companyDomains: List<String>): Boolean {
+        val h = host?.lowercase(Locale.ROOT)?.trimEnd('.') ?: return false
+        return companyDomains.any { domain ->
+            val d = domain.lowercase(Locale.ROOT).trim('.')
+            d.isNotEmpty() && (h == d || h.endsWith(".$d"))
         }
     }
 }
 
 /**
- * The site's and the account service's sign-in and sign-out addresses, as the shell meets them in the WebView. Pure, tested on the JVM.
+ * The site's sign-in and sign-out addresses, as the shell meets them in the WebView. Pure, tested on the JVM.
  *
  * - the site's `/auth/login/?next=<path>`, where a lost session is sent;
- * - the account service's authorization endpoint and sign-in pages: the paths the app gives (`ShellConfig.authSignInPaths`);
  * - the site's sign-out: the web's form POSTs `/auth/logout/`.
  */
 object SignInRoute {
@@ -69,9 +89,6 @@ object SignInRoute {
     const val SITE_SIGN_OUT = "/auth/logout/"
 
     fun isSiteSignIn(path: String?): Boolean = path == SITE_SIGN_IN || path == SITE_SIGN_IN.trimEnd('/')
-
-    /** [paths] are prefixes: `/login` also covers `/login/` and `/login/?next=...`'s path. */
-    fun isAuthSignIn(path: String?, paths: List<String>): Boolean = path != null && paths.any { path.startsWith(it) }
 
     /** The web's sign-out form: a top-level POST to the site's `/auth/logout/`. */
     fun isSignOut(method: String?, isSite: Boolean, path: String?): Boolean =

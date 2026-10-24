@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="shell_load_error_title">No se pudo cargar esta página</string>
-    <string name="shell_load_error_text">Compruebe la conexión e inténtelo de nuevo.</string>
+    <string name="shell_load_error_title">No disponible por ahora</string>
+    <string name="shell_load_error_text">El servicio no responde por el momento.</string>
     <string name="shell_load_error_retry">Reintentar</string>
-    <string name="shell_no_app_for_link">Ninguna aplicación de este teléfono puede abrir este enlace.</string>
+    <string name="shell_no_app_for_link">Ninguna aplicación de este teléfono puede abrirlo.</string>
     <string name="shell_signin_text">Inicie sesión con su cuenta VougaDev para continuar.</string>
     <string name="shell_signin_button">Iniciar sesión con VougaDev</string>
     <string name="shell_signin_working">Abriendo su sesión…</string>
     <string name="shell_signin_failed">No se pudo completar el inicio de sesión. Inténtelo de nuevo.</string>
     <string name="shell_signin_offline">Sin conexión: no se pudo abrir su sesión. Compruebe la red e inténtelo de nuevo.</string>
-    <string name="shell_signin_no_browser">Se necesita un navegador web para iniciar sesión. Instale o active uno y vuelva a intentarlo.</string>
+    <string name="shell_signin_no_browser">Para iniciar sesión se necesita Chrome u otra aplicación compatible. Instale o active una y vuelva a intentarlo.</string>
     <string name="shell_signing_out">Cerrando sesión…</string>
     <string name="shell_file_chooser_title">Elegir una foto</string>
     <string name="shell_cancel">Cancelar</string>
@@ -38,8 +38,9 @@
     <string name="shell_settings_about">Acerca de</string>
     <string name="shell_settings_version">Versión</string>
     <string name="shell_offline_bar">Sin conexión · actualizado a las %1$s</string>
-    <string name="shell_offline_title">Esta página no está disponible sin conexión</string>
-    <string name="shell_offline_text">Esto es lo que puede abrir sin conexión:</string>
-    <string name="shell_offline_nothing">Las páginas que consulte seguirán disponibles aquí sin conexión.</string>
+    <string name="shell_offline_title">Sin conexión</string>
+    <string name="shell_offline_text">Aún no guardado en este teléfono. Disponible sin conexión:</string>
+    <string name="shell_offline_nothing">Aún no guardado en este teléfono. Lo que abra con conexión seguirá disponible aquí.</string>
     <string name="shell_offline_saved_at">Actualizado a las %1$s</string>
+    <string name="shell_load_error_list">Disponible en este teléfono:</string>
 </resources>

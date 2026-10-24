@@ -10,8 +10,11 @@ package com.vougadev.shell
  * - [redirectUri]: `<applicationId>:/oauth2redirect`, the scheme AppAuth's receiver answers;
  * - [userAgentToken]: ` <token>App/<version> (Android)` ends the user agent, which the site reads (`ShipApp` for Ship);
  * - [storeName]: the prefix of what the app keeps on the phone; never changed once shipped, or people are signed out;
- * - [authSignInPaths]: the account service's authorization endpoint and sign-in pages (path prefixes): the WebView never
- *   shows them, the app's own sign-in runs instead;
+ * - [companyDomains]: the company's domains (`vougadev.com`): they and their subdomains load inside the app's WebView,
+ *   the account service's pages included, never in the browser;
+ * - [pageMarker]: a CSS selector every page of the site has (Ship: `.ship-bar`): a page without it is an edge's or a
+ *   proxy's error, never shown - the copy kept on the phone, or the native screen, instead;
+ * - [googleServerClientId]: the account service's Google client, for `nativeSignIn("google")`; null: not offered;
  * - [privacyUrl], [accountDeletionUrl]: what Settings > Privacy and data opens (the stores ask both inside the app);
  * - [notificationsPageUrl]: the hub's page where the person chooses what they receive, opened from Settings;
  * - [pushDevicesPath]: the site's address that hands this phone's push token to the hub (`PUT`, and `POST …/forget` on
@@ -29,12 +32,14 @@ data class ShellConfig(
     val userAgentToken: String,
     val versionName: String,
     val storeName: String,
-    val authSignInPaths: List<String>,
+    val companyDomains: List<String>,
     val privacyUrl: String,
     val accountDeletionUrl: String,
     val notificationsPageUrl: String? = null,
     val pushDevicesPath: String? = null,
     val consent: List<ConsentPurpose> = emptyList(),
+    val pageMarker: String? = null,
+    val googleServerClientId: String? = null,
     val offlineCacheBytes: Long = com.vougadev.shell.offline.PageCache.DEFAULT_CAP_BYTES,
     val debug: Boolean = false,
     val scopes: String = DEFAULT_SCOPES,

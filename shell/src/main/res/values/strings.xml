@@ -2,16 +2,16 @@
 <resources>
     <!-- The shell's screens: the offline page, the sign-in, links and photos. An app may override any of them. -->
     <string name="app_name" translatable="false">VougaDev</string>
-    <string name="shell_load_error_title">This page could not be loaded</string>
-    <string name="shell_load_error_text">Please check the connection and try again.</string>
+    <string name="shell_load_error_title">Unavailable for now</string>
+    <string name="shell_load_error_text">The service is not answering at the moment.</string>
     <string name="shell_load_error_retry">Try again</string>
-    <string name="shell_no_app_for_link">No application on this phone can open this link.</string>
+    <string name="shell_no_app_for_link">No application on this phone can open it.</string>
     <string name="shell_signin_text">Sign in with your VougaDev account to continue.</string>
     <string name="shell_signin_button">Sign in with VougaDev</string>
     <string name="shell_signin_working">Opening your session…</string>
     <string name="shell_signin_failed">The sign-in could not be completed. Please try again.</string>
     <string name="shell_signin_offline">No connection: your session could not be opened. Please check the network and try again.</string>
-    <string name="shell_signin_no_browser">A web browser is required to sign in. Please install or enable one, then try again.</string>
+    <string name="shell_signin_no_browser">Signing in needs Chrome or another compatible application. Please install or enable one, then try again.</string>
     <string name="shell_signing_out">Signing out…</string>
     <string name="shell_file_chooser_title">Choose a photo</string>
     <string name="shell_cancel">Cancel</string>
@@ -40,8 +40,9 @@
     <string name="shell_settings_about">About</string>
     <string name="shell_settings_version">Version</string>
     <string name="shell_offline_bar">Offline · updated at %1$s</string>
-    <string name="shell_offline_title">This page is not available offline</string>
-    <string name="shell_offline_text">Here is what you can open without a connection:</string>
-    <string name="shell_offline_nothing">The pages you visit will remain available here without a connection.</string>
+    <string name="shell_offline_title">Offline</string>
+    <string name="shell_offline_text">Not saved on this phone yet. Available without a connection:</string>
+    <string name="shell_offline_nothing">Not saved on this phone yet. What you open with a connection stays available here.</string>
     <string name="shell_offline_saved_at">Updated at %1$s</string>
+    <string name="shell_load_error_list">Available on this phone:</string>
 </resources>

@@ -6,18 +6,13 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** NEVER SIGN IN IN THE WEBVIEW: the site's and the account service's sign-in pages are taken over; the web's sign-out too. */
+/** The site's own sign-in address renews the session; the web's sign-out is taken over. */
 class SignInRouteTest {
 
     private val origin = AppOrigin("https://app.example.org")
 
-    private fun site(path: String, native: Boolean = false) = LinkPolicy.decide("https", isSite = true, isAuth = false, isNativeRoute = native, path = path)
-
-    /** The app's the account service sign-in paths (`ShellConfig.authSignInPaths`). */
-    private val authSignIn = listOf("/oauth/authorize", "/login", "/signup")
-
-    private fun auth(path: String) =
-        LinkPolicy.decide("https", isSite = false, isAuth = true, isNativeRoute = false, path = path, authSignIn = authSignIn)
+    private fun site(path: String, native: Boolean = false) =
+        LinkPolicy.decide("https", "app.example.org", isSite = true, isNativeRoute = native, path = path, companyDomains = listOf("example.org"))
 
     @Test
     fun theSitesSignInPageRunsTheNativeSignIn() {
@@ -29,19 +24,8 @@ class SignInRouteTest {
     }
 
     @Test
-    fun authsSignInPagesRunTheNativeSignInAndItsOtherPagesOpenInTheBrowser() {
-        assertEquals(Decision.SIGN_IN, auth("/oauth/authorize"))
-        assertEquals(Decision.SIGN_IN, auth("/login/"))
-        assertEquals(Decision.SIGN_IN, auth("/signup/"))
-        // without the app's paths, nothing of the account service is a sign-in
-        assertEquals(Decision.OPEN_OUTSIDE, LinkPolicy.decide("https", isSite = false, isAuth = true, isNativeRoute = false, path = "/login/"))
-        assertEquals(Decision.OPEN_OUTSIDE, auth("/account/"))
-        assertEquals(Decision.OPEN_OUTSIDE, auth("/"))
-    }
-
-    @Test
     fun anotherHostsLoginPathIsJustAnotherHost() {
-        assertEquals(Decision.OPEN_OUTSIDE, LinkPolicy.decide("https", isSite = false, isAuth = false, isNativeRoute = false, path = "/auth/login/"))
+        assertEquals(Decision.OPEN_THIRD_PARTY, LinkPolicy.decide("https", "other.example.net", isSite = false, isNativeRoute = false, path = "/auth/login/"))
     }
 
     @Test

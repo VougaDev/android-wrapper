@@ -37,6 +37,17 @@ the phone. An app's own extensions add theirs. An extension the app does not hav
 
 ## What the core does
 
+- **One app, one WebView.** The app's site, the company's other domains and subdomains (`companyDomains`) and the
+  account service's screens load in the same WebView, with the native back; never the browser. Only third parties
+  leave: their site in an in-app browser sheet, phone, e-mail, maps and chat in the phone's apps.
+- **Sign-in inside the app.** The account service's sign-in loads in the WebView and ends with
+  `VougaDevNative.completeSignIn({code, state})` on its origin (or its redirect to the app); Google signs in natively
+  (`nativeSignIn({provider: "google"})`, Credential Manager); passkeys through the WebView's WebAuthn support. A Custom
+  Tab only as the fallback while the account service does not hand other companies' logins to the app.
+- **Never a raw error page.** An answer that is not the site's own (a 502, 503 or 504 from the edge, a page without the
+  site's `pageMarker`) is treated as offline: the copy kept on the phone, or the native screen.
+- **An app's words**: no page, site, web, browser, link, URL, reload or tab in any native text (en, fr, es).
+
 - **Notifications.** Asked right after sign-in, once, with the app's own sentence (`shell_notifications_reason`), then
   the system's dialog; a refusal blocks nothing, and Settings turns them on later. On only when the app is built with
   its Firebase file (never in this repository) and gives the site's push-devices address: the token goes to the site,
