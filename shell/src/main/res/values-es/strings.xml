@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="shell_load_error_title">No se pudo cargar esta página</string>
+    <string name="shell_load_error_text">Compruebe la conexión e inténtelo de nuevo.</string>
+    <string name="shell_load_error_retry">Reintentar</string>
+    <string name="shell_no_app_for_link">Ninguna aplicación de este teléfono puede abrir este enlace.</string>
+    <string name="shell_signin_text">Inicie sesión con su cuenta VougaDev para continuar.</string>
+    <string name="shell_signin_button">Iniciar sesión con VougaDev</string>
+    <string name="shell_signin_working">Abriendo su sesión…</string>
+    <string name="shell_signin_failed">No se pudo completar el inicio de sesión. Inténtelo de nuevo.</string>
+    <string name="shell_signin_offline">Sin conexión: no se pudo abrir su sesión. Compruebe la red e inténtelo de nuevo.</string>
+    <string name="shell_signin_no_browser">Se necesita un navegador web para iniciar sesión. Instale o active uno y vuelva a intentarlo.</string>
+    <string name="shell_signing_out">Cerrando sesión…</string>
+    <string name="shell_file_chooser_title">Elegir una foto</string>
+    <string name="shell_cancel">Cancelar</string>
+    <string name="shell_back">Atrás</string>
+    <string name="shell_notifications_channel">Notificaciones</string>
+    <string name="shell_notifications_title">Notificaciones</string>
+    <string name="shell_notifications_reason">Permita las notificaciones para estar informado de lo que le concierne en esta aplicación. Puede cambiar esta elección en cualquier momento en Ajustes.</string>
+    <string name="shell_notifications_continue">Continuar</string>
+    <string name="shell_notifications_later">Ahora no</string>
+    <string name="shell_consent_title">Sus opciones sobre sus datos</string>
+    <string name="shell_consent_save">Guardar</string>
+    <string name="shell_settings_title">Ajustes</string>
+    <string name="shell_settings_notifications">Notificaciones</string>
+    <string name="shell_settings_notifications_phone">Notificaciones en este teléfono</string>
+    <string name="shell_settings_notifications_choose">Elegir lo que recibe</string>
+    <string name="shell_settings_on">Activadas</string>
+    <string name="shell_settings_off">Desactivadas</string>
+    <string name="shell_settings_features">En este teléfono</string>
+    <string name="shell_settings_privacy">Privacidad y datos</string>
+    <string name="shell_settings_privacy_policy">Política de privacidad</string>
+    <string name="shell_settings_consent">Opciones sobre sus datos</string>
+    <string name="shell_settings_delete_account">Eliminar mi cuenta</string>
+    <string name="shell_settings_account">Cuenta</string>
+    <string name="shell_settings_sign_out">Cerrar sesión</string>
+    <string name="shell_settings_sign_out_text">¿Cerrar sesión en %1$s en este teléfono?</string>
+    <string name="shell_settings_about">Acerca de</string>
+    <string name="shell_settings_version">Versión</string>
+    <string name="shell_offline_bar">Sin conexión · actualizado a las %1$s</string>
+    <string name="shell_offline_title">Esta página no está disponible sin conexión</string>
+    <string name="shell_offline_text">Esto es lo que puede abrir sin conexión:</string>
+    <string name="shell_offline_nothing">Las páginas que consulte seguirán disponibles aquí sin conexión.</string>
+    <string name="shell_offline_saved_at">Actualizado a las %1$s</string>
+</resources>

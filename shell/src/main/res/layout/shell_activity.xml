@@ -18,41 +18,81 @@
             android:layout_height="match_parent" />
     </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
 
-    <!-- Shown when the page itself could not be loaded (no network, DNS, TLS). -->
-    <LinearLayout
+    <!-- Shown while the page on screen comes from the phone (no network): "Offline · updated at 18:42". -->
+    <TextView
+        android:id="@+id/offline_bar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:background="@color/shell_offline_bar"
+        android:gravity="center"
+        android:minHeight="32dp"
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="6dp"
+        android:textAppearance="?attr/textAppearanceBody2"
+        android:textColor="@color/shell_offline_bar_text"
+        android:visibility="gone" />
+
+    <!--
+      A page that cannot be shown: never visited, with no network (then what IS available offline is listed: the pages
+      kept, the extensions' native screens), or not loaded for another reason. Never a lone "retry".
+    -->
+    <ScrollView
         android:id="@+id/error"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:background="?android:colorBackground"
         android:clickable="true"
+        android:fillViewport="true"
         android:focusable="true"
-        android:gravity="center"
-        android:orientation="vertical"
-        android:padding="32dp"
         android:visibility="gone">
 
-        <TextView
-            android:layout_width="wrap_content"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:gravity="center"
-            android:text="@string/shell_load_error_title"
-            android:textAppearance="?attr/textAppearanceHeadline6" />
+            android:gravity="center_horizontal"
+            android:orientation="vertical"
+            android:paddingHorizontal="24dp"
+            android:paddingVertical="40dp">
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:gravity="center"
-            android:text="@string/shell_load_error_text"
-            android:textAppearance="?attr/textAppearanceBody2" />
+            <TextView
+                android:id="@+id/error_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:maxWidth="480dp"
+                android:text="@string/shell_load_error_title"
+                android:textAppearance="?attr/textAppearanceHeadline6" />
 
-        <Button
-            android:id="@+id/retry"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
-            android:text="@string/shell_load_error_retry" />
-    </LinearLayout>
+            <TextView
+                android:id="@+id/error_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:gravity="center"
+                android:maxWidth="480dp"
+                android:text="@string/shell_load_error_text"
+                android:textAppearance="?attr/textAppearanceBody2" />
+
+            <!-- What can be opened offline, one row each (filled by the shell). -->
+            <LinearLayout
+                android:id="@+id/offline_list"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:maxWidth="480dp"
+                android:orientation="vertical" />
+
+            <Button
+                android:id="@+id/retry"
+                style="@style/Widget.MaterialComponents.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:minHeight="48dp"
+                android:text="@string/shell_load_error_retry" />
+        </LinearLayout>
+    </ScrollView>
 
     <!--
       The native sign-in (the account service's rule: never in a WebView). Shown while the session is renewed (progress only), when the

@@ -17,6 +17,7 @@ package com.vougadev.shell
  * - [pushDevicesPath]: the site's address that hands this phone's push token to the hub (`PUT`, and `POST …/forget` on
  *   sign-out); null: the app receives no push;
  * - [consent]: the purposes the native consent dialog asks about; empty: no dialog, `consent()` answers `{}`;
+ * - [offlineCacheBytes]: how much of the site's pages and files the phone keeps for offline;
  * - [scopes]: what the app asks the account service for.
  */
 data class ShellConfig(
@@ -34,6 +35,7 @@ data class ShellConfig(
     val notificationsPageUrl: String? = null,
     val pushDevicesPath: String? = null,
     val consent: List<ConsentPurpose> = emptyList(),
+    val offlineCacheBytes: Long = com.vougadev.shell.offline.PageCache.DEFAULT_CAP_BYTES,
     val debug: Boolean = false,
     val scopes: String = DEFAULT_SCOPES,
 ) {

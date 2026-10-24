@@ -31,6 +31,7 @@ import android.webkit.WebStorage
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Button
+import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
@@ -55,6 +56,10 @@ import com.vougadev.shell.auth.AppSession
 import com.vougadev.shell.auth.BrowserSignIn
 import com.vougadev.shell.auth.Renewal
 import com.vougadev.shell.auth.SessionWatch
+import com.vougadev.shell.offline.Connectivity
+import com.vougadev.shell.offline.OfflineCapture
+import com.vougadev.shell.offline.PageCache
+import com.vougadev.shell.push.PushRoute
 import com.vougadev.shell.net.AppHttp
 import com.vougadev.shell.net.SessionCookies
 import com.vougadev.shell.web.AppOrigin
@@ -73,6 +78,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayInputStream
 import java.io.File
+import java.util.Date
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * THE SHELL'S ONE SCREEN (VougaDev Native, README.md): the app's site in a WebView, and the few things a page cannot do
@@ -110,6 +117,40 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
     private lateinit var webView: WebView
     private lateinit var pull: SwipeRefreshLayout
     private lateinit var errorView: View
+    private lateinit var errorTitle: TextView
+    private lateinit var errorText: TextView
+    private lateinit var offlineList: LinearLayout
+    private lateinit var offlineBar: TextView
+
+    // --- Offline: the pages kept on the phone ([PageCache]) -----------------------------------------------------------
+
+    private lateinit var connectivity: Connectivity
+    private val capture by lazy { OfflineCapture(session, shell.pages) }
+
+    /** The same-origin files the page on screen asked for (written on WebView threads). */
+    private val pageFiles: MutableSet<String> = ConcurrentHashMap.newKeySet()
+
+    /** Pages answered from the phone, with when they were kept: the bar says so once the page is up. */
+    private val servedFromPhone = ConcurrentHashMap<String, Long>()
+
+    /**
+     * When a load last failed for want of network while Android still said online (a VPN can keep a network "validated"
+     * with no way out): pages come from the phone for [FORCED_OFFLINE_MS] after it, then the network is tried again.
+     */
+    @Volatile
+    private var forcedOfflineAt = 0L
+
+    private var forcedOffline: Boolean
+        get() = forcedOfflineAt != 0L && SystemClock.elapsedRealtime() - forcedOfflineAt < FORCED_OFFLINE_MS
+        set(value) {
+            forcedOfflineAt = if (value) SystemClock.elapsedRealtime() else 0L
+        }
+
+    /** No page of this start has loaded yet: a first load that fails for want of network opens the last page kept. */
+    @Volatile
+    private var firstPageOfStart = true
+
+    private val offline: Boolean get() = forcedOffline || !connectivity.online
 
     /** What each extension does inside this activity. */
     private var attachments: List<Attachment> = emptyList()
@@ -201,6 +242,10 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
         webView = findViewById(R.id.web)
         pull = findViewById(R.id.pull)
         errorView = findViewById(R.id.error)
+        errorTitle = findViewById(R.id.error_title)
+        errorText = findViewById(R.id.error_text)
+        offlineList = findViewById(R.id.offline_list)
+        offlineBar = findViewById(R.id.offline_bar)
         findViewById<Button>(R.id.retry).setOnClickListener { retry() }
         browser = BrowserSignIn(this, session)
         signInView = findViewById(R.id.signin)
@@ -229,6 +274,10 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
         attachments = shell.extensions.mapNotNull { it.attach(this) }
         // Before the first load: a document-start script only reaches documents created after it.
         installNativeBridge()
+        // The page knows when the network goes (navigator.onLine, `online`/`offline` events): its actions wait for it.
+        connectivity = Connectivity(this) { online -> onNetwork(online) }
+        connectivity.start()
+        webView.setNetworkAvailable(connectivity.online)
 
         // PULL-TO-REFRESH ONLY AT THE PAGE'S TOP: the WebView's own scroll, and the page's answer for the touched point.
         pull.setColorSchemeColors(ContextCompat.getColor(this, R.color.shell_pull))
@@ -288,6 +337,8 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
                 afterSignIn = page
                 show(SignInScreen.SIGN_IN)
             }
+            // NO NETWORK: what the person had, from the phone - never a renewal that cannot happen, never an error.
+            !connectivity.online -> openOffline(page)
             !SessionCookies.isSignedIn(session.cookies.jar()) -> renewThen(page)
             page != null -> open(page)
             savedInstanceState == null || webView.restoreState(savedInstanceState) == null -> webView.loadUrl(home())
@@ -328,6 +379,7 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
     }
 
     override fun onDestroy() {
+        connectivity.stop()
         attachments.forEach { it.onDestroy() }
         browser.dispose()
         fileCallback?.onReceiveValue(null)
@@ -421,7 +473,11 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
                     forgetLocalData()
                     show(SignInScreen.SIGN_IN)
                 }
-                Renewal.OFFLINE -> show(SignInScreen.OFFLINE)
+                // No network to renew with: the pages kept on the phone meanwhile; the network's return renews.
+                Renewal.OFFLINE -> {
+                    hideSignIn()
+                    openOffline(afterSignIn.also { afterSignIn = null })
+                }
             }
         }
     }
@@ -579,6 +635,96 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
         webView.loadUrl(url)
     }
 
+    // --- Offline ------------------------------------------------------------------------------------------------------
+
+    /** With no network: [page], else the last page kept, else home - from the phone, or the offline screen. */
+    private fun openOffline(page: String?) {
+        if (!webViewAlive) return
+        webView.loadUrl(page ?: shell.pages.pages().firstOrNull()?.url ?: home())
+    }
+
+    /** The network came or went: the page is told; back online, a page from the phone is loaded fresh. */
+    private fun onNetwork(online: Boolean) {
+        if (!webViewAlive) return
+        webView.setNetworkAvailable(online)
+        if (!online) return
+        forcedOffline = false
+        when {
+            errorView.isVisible && signInScreen == null -> retry()
+            offlineBar.isVisible -> webView.reload()
+        }
+    }
+
+    /** A same-origin GET answered from the phone, when offline: the page or file as it was kept, or null. */
+    private fun fromPhone(request: WebResourceRequest): WebResourceResponse? {
+        val hit = shell.pages.get(request.url.toString()) ?: return null
+        val mime = hit.entry.contentType.substringBefore(';').trim()
+        val charset = Regex("charset=([^;]+)", RegexOption.IGNORE_CASE).find(hit.entry.contentType)?.groupValues?.get(1)?.trim()
+            ?: if (mime.startsWith("text/") || mime.endsWith("javascript") || mime == "application/json") "utf-8" else null
+        if (request.isForMainFrame) servedFromPhone[PageCache.keyOf(request.url.toString())] = hit.entry.savedAt
+        return WebResourceResponse(mime, charset, 200, "OK", mapOf("Cache-Control" to "no-store"), ByteArrayInputStream(hit.body))
+    }
+
+    private fun time(atMs: Long): String = android.text.format.DateFormat.getTimeFormat(this).format(Date(atMs))
+
+    /**
+     * A page that cannot be shown. With no network: not available offline, and what IS (the pages kept, the
+     * extensions' native screens), each one tap away; with a network: it could not be loaded. Retry comes last.
+     */
+    private fun showUnavailable(url: String) {
+        offlineBar.visibility = View.GONE
+        offlineList.removeAllViews()
+        if (!offline) {
+            errorTitle.setText(R.string.shell_load_error_title)
+            errorText.setText(R.string.shell_load_error_text)
+        } else {
+            val key = PageCache.keyOf(url)
+            val pages = shell.pages.pages().filter { it.url != key }.take(MAX_OFFLINE_ROWS)
+            val entries = shell.extensions.flatMap { it.offlineEntries(this) }
+            errorTitle.setText(R.string.shell_offline_title)
+            errorText.setText(if (pages.isEmpty() && entries.isEmpty()) R.string.shell_offline_nothing else R.string.shell_offline_text)
+            entries.forEach { entry -> offlineList.addView(offlineRow(entry.title, null) { entry.open(this) }) }
+            pages.forEach { page ->
+                val title = page.title ?: (PushRoute.pathOf(page.url) ?: page.url)
+                offlineList.addView(offlineRow(title, getString(R.string.shell_offline_saved_at, time(page.savedAt))) {
+                    errorView.visibility = View.GONE
+                    failedUrl = null
+                    webView.loadUrl(page.url)
+                })
+            }
+        }
+        errorView.visibility = View.VISIBLE
+    }
+
+    /** One row of the offline list: a title, a quiet line under it, the whole row tappable. */
+    private fun offlineRow(title: String, detail: String?, onClick: () -> Unit): View {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            minimumHeight = (56 * resources.displayMetrics.density).toInt()
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            val pad = (16 * resources.displayMetrics.density).toInt()
+            setPadding(pad, pad / 2, pad, pad / 2)
+            isClickable = true
+            isFocusable = true
+            val ripple = android.util.TypedValue()
+            context.theme.resolveAttribute(android.R.attr.selectableItemBackground, ripple, true)
+            setBackgroundResource(ripple.resourceId)
+            setOnClickListener { onClick() }
+        }
+        row.addView(TextView(this).apply {
+            text = title
+            setTextAppearance(com.google.android.material.R.style.TextAppearance_MaterialComponents_Subtitle1)
+        })
+        detail?.let {
+            row.addView(TextView(this).apply {
+                text = it
+                setTextAppearance(com.google.android.material.R.style.TextAppearance_MaterialComponents_Body2)
+                alpha = 0.7f
+            })
+        }
+        return row
+    }
+
     // --- Page loading -----------------------------------------------------------------------------------------------
 
     // androidx.webkit's RenderProcessGoneDetector reports every `WebViewClient()` constructor call, and Kotlin's
@@ -630,22 +776,44 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
                 return WebResourceResponse("text/html", "utf-8", ByteArrayInputStream(ByteArray(0)))
             }
             if (!isSite || !request.method.equals("GET", ignoreCase = true)) return null
-            return shell.extensions.firstNotNullOfOrNull { it.interceptRequest(applicationContext, url) }
+            shell.extensions.firstNotNullOfOrNull { it.interceptRequest(applicationContext, url) }?.let { return it }
+            // NO NETWORK: the page or file as the phone kept it; with the network, the files a page uses are noted.
+            if (offline) return fromPhone(request)
+            if (!request.isForMainFrame) pageFiles += url.toString()
+            return null
         }
 
         override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
+            pageFiles.clear()
+            // Only the page now starting may still say it came from the phone (a page reports "finished" more than once).
+            val key = url?.let(PageCache::keyOf)
+            servedFromPhone.keys.retainAll { it == key }
             if (failedUrl == null) errorView.visibility = View.GONE
         }
 
         override fun onPageFinished(view: WebView, url: String?) {
             pull.isRefreshing = false
             if (!origin.matches(url)) return
+            if (failedUrl == null) firstPageOfStart = false
             val siteSession = SessionCookies.isSignedIn(CookieManager.getInstance().getCookie(origin.baseUrl))
+            val keptAt = url?.let { servedFromPhone[PageCache.keyOf(it)] }
+            if (keptAt != null) {
+                offlineBar.text = getString(R.string.shell_offline_bar, time(keptAt))
+                offlineBar.visibility = View.VISIBLE
+            } else {
+                offlineBar.visibility = View.GONE
+                // Loaded from the network: kept for offline, with the files it used - only as the person sees it (a
+                // page the site sent while dropping the session is renewed below, never kept).
+                if (!offline && failedUrl == null && url != null && (siteSession || !session.signedIn)) {
+                    val files = pageFiles.toList()
+                    lifecycleScope.launch { capture.capture(url, files) }
+                }
+            }
             when {
                 siteSession -> onSignedInPage()
                 // The site dropped the session (its access token expired) while this phone is signed in: renewed
                 // silently, then this page again - never an anonymous page for a signed-in person ([SessionWatch]).
-                sessionWatch.shouldRenew(session.signedIn, false, signInScreen != null || signingOut, SystemClock.elapsedRealtime()) -> {
+                sessionWatch.shouldRenew(session.signedIn, false, signInScreen != null || signingOut || offline, SystemClock.elapsedRealtime()) -> {
                     Log.i(TAG, "The site dropped the session: renewed, then the page again")
                     renewThen(url)
                 }
@@ -655,8 +823,23 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
         override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
             if (!request.isForMainFrame) return
             pull.isRefreshing = false
-            failedUrl = request.url.toString()
-            errorView.visibility = View.VISIBLE
+            val url = request.url.toString()
+            failedUrl = url
+            val network = error.errorCode in NETWORK_ERRORS
+            // Android said online, the network said no: the page as the phone kept it - or, starting, the last one kept.
+            val kept = when {
+                !network -> null
+                shell.pages.savedAt(url) != null -> url
+                firstPageOfStart -> shell.pages.pages().firstOrNull()?.url
+                else -> null
+            }
+            if (network) forcedOffline = true
+            if (kept != null && !(kept == url && servedFromPhone.containsKey(PageCache.keyOf(url)))) {
+                failedUrl = null
+                view.loadUrl(kept)
+                return
+            }
+            showUnavailable(url)
         }
 
         /**
@@ -838,6 +1021,12 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
         private const val TAG = "VougaDevShell"
         private const val CAPTURES_DIR = "captures"
         private const val KEY_ASKED = "asked"
+        private const val MAX_OFFLINE_ROWS = 8
+        private const val FORCED_OFFLINE_MS = 30_000L
+        private val NETWORK_ERRORS = setOf(
+            WebViewClient.ERROR_HOST_LOOKUP, WebViewClient.ERROR_CONNECT, WebViewClient.ERROR_TIMEOUT,
+            WebViewClient.ERROR_IO, WebViewClient.ERROR_UNKNOWN,
+        )
 
         /** [launcher] (the app's shell activity) opening the same-origin [path]. */
         fun withPage(launcher: Intent, path: String?): Intent = launcher

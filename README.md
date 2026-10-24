@@ -52,6 +52,11 @@ the phone. An app's own extensions add theirs. An extension the app does not hav
   answered by `consent()` and set as the first-party cookie `vougadev_consent` (`analytics:1|ads:0`), from which the
   site hides its own banner.
 - **No install prompt** anywhere; a site hides its own when `VougaDevNative` is present.
+- **Offline, never a dead end.** The pages the person visited and their same-origin files are kept on the phone (a size
+  cap, cleared on sign-out) and served with no network under a quiet "Offline · updated at HH:MM" bar. The app starts
+  offline on the last page kept; a page never visited shows what IS available (the pages kept, the extensions'
+  offline screens), never a lone "retry"; a first start offline shows the app's welcome. `navigator.onLine` and the
+  `online`/`offline` events follow the network, so the site's actions wait for it.
 
 ## Using it in an app
 

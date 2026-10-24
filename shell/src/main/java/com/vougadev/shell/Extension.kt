@@ -45,6 +45,9 @@ interface Extension {
 
     /** Its rows in the native Settings screen, if any (an offline map's size). */
     fun settingsEntries(context: Context): List<SettingsEntry> = emptyList()
+
+    /** What it offers with no network (Ship: the courier's missions), listed when a page is not available offline. */
+    fun offlineEntries(context: Context): List<OfflineEntry> = emptyList()
 }
 
 /** What an extension does inside one shell activity. Main thread. */
@@ -75,6 +78,9 @@ interface ExtensionHost {
     /** The notification permission (Android 13+), with no explanation: for an extension whose start already explained. */
     fun askNotifications(then: () -> Unit)
 }
+
+/** Something the app opens with no network: a title, and what a tap opens. */
+data class OfflineEntry(val title: String, val open: (Activity) -> Unit)
 
 /** One row of the Settings screen: a title, an optional summary, and what a tap does (null: not tappable). */
 data class SettingsEntry(val title: String, val summary: String? = null, val onClick: ((Activity) -> Unit)? = null)

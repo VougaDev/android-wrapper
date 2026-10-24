@@ -3,6 +3,8 @@ package com.vougadev.shell
 import android.content.Context
 import android.content.Intent
 import com.vougadev.shell.auth.AppSession
+import com.vougadev.shell.offline.PageCache
+import java.io.File
 import com.vougadev.shell.push.Push
 
 /** Implemented by the app's `Application`: the one [Shell] of the process (services and notifications reach it). */
@@ -35,13 +37,19 @@ class Shell(context: Context, val config: ShellConfig, val extensions: List<Exte
         afterSignOut = { forget() },
     )
 
+    /** The pages and files kept for offline ([PageCache]); the person's, cleared on sign-out. */
+    val pages = PageCache(File(app.filesDir, "shell_offline"), config.offlineCacheBytes)
+
     /** `VougaDevNative.features()`. */
     val features: List<String> get() = extensions.map { it.feature }
 
     inline fun <reified T : Extension> extension(): T? = extensions.filterIsInstance<T>().firstOrNull()
 
-    /** What every extension keeps of the person goes. */
-    suspend fun forget() = extensions.forEach { it.forget(app) }
+    /** What the app keeps of the person goes: the pages kept for offline, and what every extension keeps. */
+    suspend fun forget() {
+        pages.clear()
+        extensions.forEach { it.forget(app) }
+    }
 
     /** The app's launcher activity (its [ShellActivity]), for a notification with nothing more precise to open. */
     fun launcher(): Intent = app.packageManager.getLaunchIntentForPackage(app.packageName)

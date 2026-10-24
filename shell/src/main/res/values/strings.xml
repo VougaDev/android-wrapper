@@ -39,4 +39,9 @@
     <string name="shell_settings_sign_out_text">Sign out of %1$s on this phone?</string>
     <string name="shell_settings_about">About</string>
     <string name="shell_settings_version">Version</string>
+    <string name="shell_offline_bar">Offline · updated at %1$s</string>
+    <string name="shell_offline_title">This page is not available offline</string>
+    <string name="shell_offline_text">Here is what you can open without a connection:</string>
+    <string name="shell_offline_nothing">The pages you visit will remain available here without a connection.</string>
+    <string name="shell_offline_saved_at">Updated at %1$s</string>
 </resources>

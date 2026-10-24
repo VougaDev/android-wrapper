@@ -37,4 +37,9 @@
     <string name="shell_settings_sign_out_text">Se déconnecter de %1$s sur ce téléphone ?</string>
     <string name="shell_settings_about">À propos</string>
     <string name="shell_settings_version">Version</string>
+    <string name="shell_offline_bar">Hors ligne · mis à jour à %1$s</string>
+    <string name="shell_offline_title">Cette page n\'est pas disponible hors ligne</string>
+    <string name="shell_offline_text">Voici ce que vous pouvez consulter sans connexion :</string>
+    <string name="shell_offline_nothing">Les pages que vous consultez resteront disponibles ici sans connexion.</string>
+    <string name="shell_offline_saved_at">Mise à jour à %1$s</string>
 </resources>

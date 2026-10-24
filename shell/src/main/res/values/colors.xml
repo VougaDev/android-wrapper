@@ -7,6 +7,9 @@
     <color name="shell_accent">#FFFFFFFF</color>
     <color name="shell_on_accent">#FF000000</color>
     <color name="shell_pull">#FF000000</color>
+    <!-- The quiet "offline" bar over the page. -->
+    <color name="shell_offline_bar">#FF3A3A3A</color>
+    <color name="shell_offline_bar_text">#FFFFFFFF</color>
     <!-- The mark on the sign-in screen: the app's own (its launcher foreground, for example). -->
     <item name="shell_signin_mark" type="drawable">@android:drawable/sym_def_app_icon</item>
     <!-- The small icon of the app's notifications (one colour): the app's own. -->
