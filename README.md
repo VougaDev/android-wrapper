@@ -50,8 +50,9 @@ the phone. An app's own extensions add theirs. An extension the app does not hav
   the way stays inside while it works there. Only a step that refuses WebViews (`outsideHosts`, or the checkout's
   `openOutside({url, returnUrl})` on a `trustedOrigins` origin) goes to Chrome's Auth Tab and comes back by itself
   under `outsideReturnPrefix`, loading in the WebView.
-- **Never a raw error page.** An answer that is not the site's own (a 502, 503 or 504 from the edge, a page without the
-  site's `pageMarker`) is treated as offline: the copy kept on the phone, or the native screen.
+- **Never a raw error page.** Every company page carries `<meta name="vougadev-page" content="<service>">` in its head.
+  An answer that is not one (a 502, 503 or 504 from the edge, a page of the app's or a `trustedOrigins` origin without
+  that meta) is treated as offline: the copy kept on the phone, or the native screen.
 - **An app's words**: no page, site, web, browser, link, URL, reload or tab in any native text (en, fr, es).
 
 - **Notifications.** Asked right after sign-in, once, with the app's own sentence (`shell_notifications_reason`), then

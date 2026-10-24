@@ -12,8 +12,6 @@ package com.vougadev.shell
  * - [storeName]: the prefix of what the app keeps on the phone; never changed once shipped, or people are signed out;
  * - [companyDomains]: the company's domains (`vougadev.com`): they and their subdomains load inside the app's WebView,
  *   the account service's pages included, never in the browser;
- * - [pageMarker]: a CSS selector every page of the site has (Ship: `.ship-bar`): a page without it is an edge's or a
- *   proxy's error, never shown - the copy kept on the phone, or the native screen, instead;
  * - [googleServerClientId]: the account service's Google client, for `nativeSignIn("google")`; null: not offered;
  * - [trustedOrigins]: other company origins whose frames get `platform()`, `version()`, `features()` and
  *   `openOutside()` (Ship: the payment service's `https://pay.vougadev.com`, embedded in the site too);
@@ -44,7 +42,6 @@ data class ShellConfig(
     val notificationsPageUrl: String? = null,
     val pushDevicesPath: String? = null,
     val consent: List<ConsentPurpose> = emptyList(),
-    val pageMarker: String? = null,
     val googleServerClientId: String? = null,
     val trustedOrigins: List<String> = emptyList(),
     val outsideReturnPrefix: String? = null,

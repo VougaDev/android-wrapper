@@ -118,6 +118,7 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
 
     private val origin: AppOrigin by lazy { session.origin }
     private val auth: AppOrigin by lazy { AppOrigin(session.config.authBaseUrl) }
+    private val trusted: List<AppOrigin> by lazy { session.config.trustedOrigins.map(::AppOrigin) }
     final override val location = LocationAsk(this)
     final override val activity: AppCompatActivity get() = this
     private lateinit var webView: WebView
@@ -462,6 +463,8 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
         val prefix = session.config.outsideReturnPrefix
         if (action == Intent.ACTION_VIEW && back != null && prefix != null && back.startsWith(prefix)) {
             intent?.data = null
+            outsideAnswer?.invoke(NativeBridge.ok())
+            outsideAnswer = null
             return Ask.Page(back)
         }
         return when (action) {
@@ -758,7 +761,7 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
 
     /**
      * NEVER A RAW ERROR PAGE: an answer that is not the site's own (a 502, 503 or 504 from the edge, a CDN's or a
-     * proxy's page, a page without [ShellConfig.pageMarker]). Treated as offline: the copy kept on the phone - or, as the
+     * proxy's page, a page of the app's or a trusted origin without the company-page meta [PAGE_META]). Treated as offline: the copy kept on the phone - or, as the
      * app starts, the last one kept - with the native bar; else the native screen with what is available.
      */
     private fun foreignPage(url: String, status: Int?) {
@@ -986,20 +989,16 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
             if (origin.matches(url)) tellNetwork()
             val status = httpStatus.remove(key)
             val gateway = status != null && status >= 502
-            if (!origin.matches(url)) {
-                // A company page the edge could not serve: never the raw error.
-                if (gateway && keptAt == null && failedUrl == null) foreignPage(url, status)
-                return
-            }
-            val marker = session.config.pageMarker
+            val own = origin.matches(url)
             when {
-                keptAt != null -> siteFinished(url, keptAt)
-                // NEVER A RAW ERROR PAGE: a page without the site's own markup is an edge's, a proxy's or a CDN's.
-                marker != null -> view.evaluateJavascript("document.querySelector(${JSONObject.quote(marker)}) !== null") { found ->
-                    if (found == "false" && failedUrl == null) foreignPage(url, status) else siteFinished(url, null)
+                keptAt != null -> if (own) siteFinished(url, keptAt)
+                // NEVER A RAW ERROR PAGE: a company page without the company-page meta is an edge's, a proxy's or a CDN's.
+                own || trusted.any { it.matches(url) } -> view.evaluateJavascript(PAGE_META_CHECK) { found ->
+                    if (found == "false" && failedUrl == null) foreignPage(url, status) else if (own) siteFinished(url, null)
                 }
+                // Another company page (the account service's) the edge could not serve: never the raw error.
                 gateway && failedUrl == null -> foreignPage(url, status)
-                else -> siteFinished(url, null)
+                own -> siteFinished(url, null)
             }
         }
 
@@ -1052,18 +1051,15 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
      */
     private fun openOutsideStep(url: Uri, answer: ((JSONObject) -> Unit)?) {
         val back = session.config.outsideReturnPrefix?.toUri()
-        if (back == null || back.host == null) {
-            openThirdParty(url)
-            return answer?.invoke(NativeBridge.ok()) ?: Unit
-        }
+        // No way back into the app: a page asking says so and goes there itself; a link opens in the sheet.
+        if (back == null || back.host == null) return answer?.invoke(NativeBridge.refused("failed")) ?: openThirdParty(url)
         outsideAnswer?.invoke(NativeBridge.refused("cancelled"))
         outsideAnswer = answer
         try {
             AuthTabIntent.Builder().build().launch(outsideLauncher, url, back.host!!, back.path ?: "/")
         } catch (_: ActivityNotFoundException) {
             outsideAnswer = null
-            openThirdParty(url)
-            answer?.invoke(NativeBridge.ok())
+            answer?.invoke(NativeBridge.refused("failed")) ?: openThirdParty(url)
         }
     }
 
@@ -1078,7 +1074,10 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
             failedUrl = null
             if (webViewAlive) webView.loadUrl(back)
         } else {
-            answer?.invoke(NativeBridge.refused(if (result.resultCode == AuthTabIntent.RESULT_CANCELED) "cancelled" else "failed"))
+            // RESULT_UNKNOWN_CODE: a Custom Tab stood in for the Auth Tab and was closed before its return came back
+            // through the app's own link (which answers ok in [pageFrom]): the person left the step.
+            val closed = result.resultCode == AuthTabIntent.RESULT_CANCELED || result.resultCode == AuthTabIntent.RESULT_UNKNOWN_CODE
+            answer?.invoke(NativeBridge.refused(if (closed) "cancelled" else "failed"))
         }
     }
 
@@ -1290,7 +1289,6 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
                 val authMethods = signInMethods()
                 val authBridge = NativeBridge(auth, authMethods)
                 // Other trusted company origins (the payment service, in its own frames too): the constants and openOutside.
-                val trusted = session.config.trustedOrigins.map(::AppOrigin)
                 val trustedRules = trusted.flatMap { NativeShim.originRules(it) }.toSet()
                 val trustedBridges = trusted.map { it to NativeBridge(it, outsideMethods()) }
                 WebViewCompat.addWebMessageListener(webView, NativeShim.CHANNEL, rules + authRules + trustedRules) { _, message, sourceOrigin, _, replyProxy ->
@@ -1330,6 +1328,10 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
         private const val MAX_OFFLINE_ROWS = 8
         private const val KEY_SIGN_IN_REQUEST = "shell_sign_in_request"
         private const val FORCED_OFFLINE_MS = 30_000L
+
+        /** Every company page carries `<meta name="vougadev-page" content="<service>">`; an answer without it is not one. */
+        const val PAGE_META = "vougadev-page"
+        private const val PAGE_META_CHECK = "document.querySelector('meta[name=\"$PAGE_META\"]') !== null"
         private val NETWORK_ERRORS = setOf(
             WebViewClient.ERROR_HOST_LOOKUP, WebViewClient.ERROR_CONNECT, WebViewClient.ERROR_TIMEOUT,
             WebViewClient.ERROR_IO, WebViewClient.ERROR_UNKNOWN,
