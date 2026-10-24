@@ -28,11 +28,11 @@ class AppSession(
 ) {
 
     private val app: Context = context.applicationContext
-    private val prefs = app.getSharedPreferences(config.storeName + "_auth", Context.MODE_PRIVATE)
+    private val prefs = app.getSharedPreferences(prefsName(config.storeName), Context.MODE_PRIVATE)
 
     val origin = AppOrigin(config.baseUrl)
     val client = AuthClient(config.authBaseUrl, config.authClientId, config.redirectUri)
-    val store = TokenStore(PrefsValues(prefs), KeystoreSealer(config.storeName + "_tokens"))
+    val store = TokenStore(PrefsValues(prefs), KeystoreSealer(keyAlias(config.storeName)))
     val cookies: CookieJarPort = WebCookies(origin)
 
     /** The WebView's own user agent plus ` <Token>App/<version> (Android)`, as every native call sends it. */
@@ -105,6 +105,14 @@ class AppSession(
 
     companion object {
         const val SIGN_OUT_PATH = "/auth/logout/"
+
+        /**
+         * WHAT A SIGNED-IN PHONE KEEPS, BY NAME: the preferences holding the sealed refresh token and the discovery
+         * copy, and the Keystore key that seals it. Renaming either signs every person out at the next update.
+         */
+        fun prefsName(storeName: String) = storeName + "_auth"
+
+        fun keyAlias(storeName: String) = storeName + "_tokens"
         private const val KEY_DISCOVERY = "discovery"
         private const val KEY_DISCOVERY_AT = "discovery_at"
         private const val DISCOVERY_KEPT_MS = 24L * 3600 * 1000

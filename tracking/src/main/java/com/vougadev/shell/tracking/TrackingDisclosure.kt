@@ -13,7 +13,8 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
  */
 object TrackingDisclosure {
 
-    private const val PREFS = "tracking_disclosure"
+    /** The person's agreement, kept across updates under this name. */
+    const val PREFS = "tracking_disclosure"
     private const val KEY_ACCEPTED = "accepted"
 
     fun accepted(context: Context): Boolean =

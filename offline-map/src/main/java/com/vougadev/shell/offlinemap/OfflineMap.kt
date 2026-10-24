@@ -136,6 +136,8 @@ object OfflineMap {
 
     private val NAME = Regex("^[A-Za-z0-9_-]+$")
     /** `<storeName>_offline_map`: the regions on the phone and their versions. */
-    private fun prefs(context: Context) =
-        context.getSharedPreferences(Shell.of(context).config.storeName + "_offline_map", Context.MODE_PRIVATE)
+    private fun prefs(context: Context) = context.getSharedPreferences(prefsName(Shell.of(context).config.storeName), Context.MODE_PRIVATE)
+
+    /** The regions' versions, kept across updates under this name (the files sit in `files/map/`). */
+    fun prefsName(storeName: String) = storeName + "_offline_map"
 }

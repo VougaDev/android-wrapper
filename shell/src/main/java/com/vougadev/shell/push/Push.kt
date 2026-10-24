@@ -92,8 +92,10 @@ object Push {
         caller.postJson("${path.trimEnd('/')}/forget", Bodies.forget(token))
     }
 
-    private fun prefs(context: Context) =
-        context.getSharedPreferences(Shell.of(context).config.storeName + "_push", Context.MODE_PRIVATE)
+    private fun prefs(context: Context) = context.getSharedPreferences(prefsName(Shell.of(context).config.storeName), Context.MODE_PRIVATE)
+
+    /** The phone's push token, kept across updates under this name. */
+    fun prefsName(storeName: String) = storeName + "_push"
 
     /** Pure: the bodies, tested on the JVM. */
     object Bodies {

@@ -11,6 +11,7 @@ import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.SystemClock
 import android.provider.MediaStore
 import android.util.Log
 import android.view.MotionEvent
@@ -53,6 +54,7 @@ import androidx.webkit.WebViewFeature
 import com.vougadev.shell.auth.AppSession
 import com.vougadev.shell.auth.BrowserSignIn
 import com.vougadev.shell.auth.Renewal
+import com.vougadev.shell.auth.SessionWatch
 import com.vougadev.shell.net.AppHttp
 import com.vougadev.shell.net.SessionCookies
 import com.vougadev.shell.web.AppOrigin
@@ -126,6 +128,7 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
     /** The page to open once the session is open (the sign-in's `next`). */
     private var afterSignIn: String? = null
     private var signingOut = false
+    private val sessionWatch = SessionWatch()
 
     private val browserLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         lifecycleScope.launch { finishBrowserSignIn(result.data) }
@@ -637,7 +640,16 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
         override fun onPageFinished(view: WebView, url: String?) {
             pull.isRefreshing = false
             if (!origin.matches(url)) return
-            if (SessionCookies.isSignedIn(CookieManager.getInstance().getCookie(origin.baseUrl))) onSignedInPage()
+            val siteSession = SessionCookies.isSignedIn(CookieManager.getInstance().getCookie(origin.baseUrl))
+            when {
+                siteSession -> onSignedInPage()
+                // The site dropped the session (its access token expired) while this phone is signed in: renewed
+                // silently, then this page again - never an anonymous page for a signed-in person ([SessionWatch]).
+                sessionWatch.shouldRenew(session.signedIn, false, signInScreen != null || signingOut, SystemClock.elapsedRealtime()) -> {
+                    Log.i(TAG, "The site dropped the session: renewed, then the page again")
+                    renewThen(url)
+                }
+            }
         }
 
         override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {

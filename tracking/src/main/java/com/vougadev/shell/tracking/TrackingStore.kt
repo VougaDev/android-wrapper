@@ -76,7 +76,8 @@ class TrackingStore(context: Context, private val config: TrackingConfig) {
     }
 
     companion object {
-        private const val PREFS = "tracking"
+        /** The request being tracked, kept across updates under this name. */
+        const val PREFS = "tracking"
         private const val KEY_REQUEST = "request"
         private const val KEY_STARTED_AT = "started_at"
         private const val KEY_OUTCOME_MISSION = "outcome_mission"
