@@ -1,10 +1,10 @@
 package com.vougadev.shell.web
 
 /**
- * The back press over an open Bootstrap modal or off-canvas panel (the sidebar on a phone).
+ * The back press over an open modal or off-canvas panel (the sidebar on a phone).
  *
  * The site's pages keep no history sentinel for a modal, so back asks the page FIRST: [SCRIPT] hides the topmost
- * `.modal.show` (else an open `.offcanvas.show`) with Bootstrap's own `hide()` and answers `"closed"`; with nothing
+ * `.modal.show` (else an open `.offcanvas.show`) with the page's own `hide()` and answers `"closed"`; with nothing
  * open it answers `"none"`, and only then does back go back in history, or leave.
  */
 object ModalBack {

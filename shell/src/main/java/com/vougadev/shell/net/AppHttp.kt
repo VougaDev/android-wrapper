@@ -7,8 +7,8 @@ import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 /**
- * Calls the app makes to its site outside the WebView, AS THE WEBVIEW'S SESSION (PIVO's `net/PivoHttp.kt` rules). One
- * client and one header set, so every such call looks the same to the site:
+ * Calls the app makes to its site outside the WebView, AS THE WEBVIEW'S SESSION. One client and one
+ * header set, so every such call looks the same to the site:
  *
  * - `Cookie`: the WebView's cookie jar for the site's origin;
  * - `Referer`: the site's own origin - without it the site's CSRF check refuses an HTTPS POST (403 HTML);

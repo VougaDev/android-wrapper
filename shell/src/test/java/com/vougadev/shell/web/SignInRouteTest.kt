@@ -13,22 +13,28 @@ class SignInRouteTest {
 
     private fun site(path: String, native: Boolean = false) = LinkPolicy.decide("https", isSite = true, isAuth = false, isNativeRoute = native, path = path)
 
-    private fun auth(path: String) = LinkPolicy.decide("https", isSite = false, isAuth = true, isNativeRoute = false, path = path)
+    /** The app's the account service sign-in paths (`ShellConfig.authSignInPaths`). */
+    private val authSignIn = listOf("/oauth/authorize", "/login", "/signup")
+
+    private fun auth(path: String) =
+        LinkPolicy.decide("https", isSite = false, isAuth = true, isNativeRoute = false, path = path, authSignIn = authSignIn)
 
     @Test
     fun theSitesSignInPageRunsTheNativeSignIn() {
         assertEquals(Decision.SIGN_IN, site("/auth/login/"))
         assertEquals(Decision.SIGN_IN, site("/auth/login"))
         assertEquals(Decision.LOAD_INSIDE, site("/auth/login-help/"))
-        assertEquals(Decision.LOAD_INSIDE, site("/shipments/"))
-        assertEquals(Decision.OPEN_NATIVE, site("/courier/missions/", native = true))
+        assertEquals(Decision.LOAD_INSIDE, site("/orders/"))
+        assertEquals(Decision.OPEN_NATIVE, site("/native/", native = true))
     }
 
     @Test
     fun authsSignInPagesRunTheNativeSignInAndItsOtherPagesOpenInTheBrowser() {
-        assertEquals(Decision.SIGN_IN, auth("/identity/o/authorize"))
-        assertEquals(Decision.SIGN_IN, auth("/accounts/login/"))
-        assertEquals(Decision.SIGN_IN, auth("/accounts/signup/"))
+        assertEquals(Decision.SIGN_IN, auth("/oauth/authorize"))
+        assertEquals(Decision.SIGN_IN, auth("/login/"))
+        assertEquals(Decision.SIGN_IN, auth("/signup/"))
+        // without the app's paths, nothing of the account service is a sign-in
+        assertEquals(Decision.OPEN_OUTSIDE, LinkPolicy.decide("https", isSite = false, isAuth = true, isNativeRoute = false, path = "/login/"))
         assertEquals(Decision.OPEN_OUTSIDE, auth("/account/"))
         assertEquals(Decision.OPEN_OUTSIDE, auth("/"))
     }
@@ -40,8 +46,8 @@ class SignInRouteTest {
 
     @Test
     fun afterSignInTheNextPageOpensWhenItIsTheSitesOwn() {
-        assertEquals("https://app.example.org/courier/missions/", SignInRoute.after(origin, "/courier/missions/"))
-        assertEquals("https://app.example.org/shipments/?tab=sent", SignInRoute.after(origin, "/shipments/?tab=sent"))
+        assertEquals("https://app.example.org/native/", SignInRoute.after(origin, "/native/"))
+        assertEquals("https://app.example.org/orders/?tab=sent", SignInRoute.after(origin, "/orders/?tab=sent"))
         assertEquals("https://app.example.org/", SignInRoute.after(origin, null))
         assertEquals("https://app.example.org/", SignInRoute.after(origin, "//evil.example/"))
         assertEquals("https://app.example.org/", SignInRoute.after(origin, "https://evil.example/"))
@@ -56,6 +62,6 @@ class SignInRouteTest {
         assertTrue(SignInRoute.isSignOut("post", isSite = true, path = "/auth/logout"))
         assertFalse(SignInRoute.isSignOut("GET", isSite = true, path = "/auth/logout/"))
         assertFalse(SignInRoute.isSignOut("POST", isSite = false, path = "/auth/logout/"))
-        assertFalse(SignInRoute.isSignOut("POST", isSite = true, path = "/shipments/"))
+        assertFalse(SignInRoute.isSignOut("POST", isSite = true, path = "/orders/"))
     }
 }

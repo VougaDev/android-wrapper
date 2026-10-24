@@ -104,7 +104,7 @@ class SessionKeeperTest {
     // --- The same path from a native call --------------------------------------------------------------------------
 
     private val origin = AppOrigin("https://app.example.org")
-    private val mission = "/api/v1/courier/missions/open?size=12"
+    private val items = "/api/v1/items?size=12"
 
     private fun caller(server: FakeServer, renew: suspend (String?) -> Renewal = keeper::renew) =
         AppCaller(origin, jar::jar, { "UA" }, { "fr" }, renew, server.client)
@@ -118,7 +118,7 @@ class SessionKeeperTest {
                 FakeServer.response(request, 200, """{"results": [], "next_cursor": null}""")
             }
         }
-        val answer = caller(server).get(mission)
+        val answer = caller(server).get(items)
         assertTrue(answer is ApiOutcome.Ok)
         assertEquals(2, server.requests.size)
         assertEquals("csrftoken=new; sessionid=fresh", server.requests[1].header("Cookie"))
@@ -131,7 +131,7 @@ class SessionKeeperTest {
             if (request.header("X-CSRFToken") == "old") FakeServer.response(request, 403, "<html>CSRF</html>")
             else FakeServer.response(request, 200, """{"id": "x"}""")
         }
-        val answer = caller(server).postJson("/api/v1/courier/missions/x/accept", org.json.JSONObject())
+        val answer = caller(server).postJson("/api/v1/items/x/accept", org.json.JSONObject())
         assertTrue(answer is ApiOutcome.Ok)
         assertEquals("new", server.requests[1].header("X-CSRFToken"))
         assertEquals("{}", Buffer().also { server.requests[1].body!!.writeTo(it) }.readUtf8())
@@ -141,7 +141,7 @@ class SessionKeeperTest {
     fun aNativeCallReportsTheLostSessionOnlyWhenTheRefreshIsRefused() = runBlocking {
         refreshAnswer = { TokenAnswer.Refused }
         val server = FakeServer { FakeServer.response(it, 401, """{"code": "unauthenticated", "detail": "x"}""") }
-        assertEquals(ApiOutcome.SessionLost, caller(server).get(mission))
+        assertEquals(ApiOutcome.SessionLost, caller(server).get(items))
         assertEquals(1, server.requests.size)
     }
 
@@ -149,13 +149,13 @@ class SessionKeeperTest {
     fun aNativeCallWhoseRenewalCannotReachAuthIsOffline() = runBlocking {
         refreshAnswer = { TokenAnswer.Unreachable }
         val server = FakeServer { FakeServer.response(it, 302) }
-        assertEquals(ApiOutcome.Offline, caller(server).get(mission))
+        assertEquals(ApiOutcome.Offline, caller(server).get(items))
     }
 
     @Test
     fun aRefusalInTheServersWordsIsNotALostSession() = runBlocking {
         val server = FakeServer { FakeServer.response(it, 403, """{"code": "identity_expired", "detail": "Renew it."}""") }
-        assertEquals(ApiOutcome.Refused(403, "identity_expired", "Renew it."), caller(server).get(mission))
+        assertEquals(ApiOutcome.Refused(403, "identity_expired", "Renew it."), caller(server).get(items))
         assertTrue(refreshed.isEmpty())
     }
 }

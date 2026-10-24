@@ -41,7 +41,7 @@ class ApiOutcomeTest {
 
     @Test
     fun a403WithoutJsonIsALostSession() {
-        assertEquals(ApiOutcome.SessionLost, ApiOutcome.classify(403, "<html><body>CSRF verification failed</body></html>"))
+        assertEquals(ApiOutcome.SessionLost, ApiOutcome.classify(403, "<html><body>Forbidden</body></html>"))
     }
 
     @Test

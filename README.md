@@ -35,7 +35,8 @@ Ship's members, for example: `startTracking(…)`, `stopTracking()`, `trackingSt
    dependencies { implementation("com.vougadev:shell") }
    ```
 2. Give the app's configuration (`ShellConfig`: site, the account service, its own public client id, redirect
-   `<applicationId>:/oauth2redirect`, user-agent token, a `storeName` never changed once shipped), from the app's
+   `<applicationId>:/oauth2redirect`, user-agent token, a `storeName` never changed once shipped, the account service's sign-in paths
+   `authSignInPaths` that the WebView hands to the app's own sign-in), from the app's
    BuildConfig. Nothing app-specific lives in this repository.
 3. Subclass `AppSession` (one per process) and `ShellActivity` (`bridgeMethods()`, `nativeScreen(path)`, the hooks), and
    declare that activity as the launcher, with `manifestPlaceholders["appAuthRedirectScheme"] = applicationId`.

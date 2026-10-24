@@ -8,6 +8,8 @@ package com.vougadev.shell
  * - [redirectUri]: `<applicationId>:/oauth2redirect`, the scheme AppAuth's receiver answers;
  * - [userAgentToken]: ` <token>App/<version> (Android)` ends the user agent, which the site reads (`ShipApp` for Ship);
  * - [storeName]: the prefix of what the app keeps on the phone; never changed once shipped, or people are signed out;
+ * - [authSignInPaths]: the account service's authorization endpoint and sign-in pages (path prefixes): the WebView never shows them,
+ *   the app's own sign-in runs instead;
  * - [scopes]: what the app asks the account service for.
  */
 data class ShellConfig(
@@ -18,6 +20,7 @@ data class ShellConfig(
     val userAgentToken: String,
     val versionName: String,
     val storeName: String,
+    val authSignInPaths: List<String>,
     val debug: Boolean = false,
     val scopes: String = DEFAULT_SCOPES,
 ) {

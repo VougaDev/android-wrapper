@@ -13,7 +13,7 @@ import org.json.JSONObject
  * ```
  *
  * The others are the [methods] of the app's own features (Ship: `startTracking`, `stopTracking`, `trackingState`,
- * `openMissions`; docs/integration/native-bridge.md), each `name(args) -> Promise<{ok: true, ...} | {ok: false, error}>`.
+ * `openMissions`; README.md), each `name(args) -> Promise<{ok: true, ...} | {ok: false, error}>`.
  * A page tests for a member with `typeof window.VougaDevNative.<name> === "function"`; absent, it runs in a plain
  * browser, or in an app without that feature. A Promise always resolves, never rejects. The object is frozen and cannot
  * be replaced.

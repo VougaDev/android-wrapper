@@ -31,7 +31,7 @@ class ShellWebTest {
 
     @Test
     fun aNotificationPathStaysOnTheSite() {
-        assertEquals("https://app.example.org/shipments/?a=1", site.pageUrl("/shipments/?a=1"))
+        assertEquals("https://app.example.org/orders/?a=1", site.pageUrl("/orders/?a=1"))
         assertNull(site.pageUrl("//evil.io/x"))
         assertNull(site.pageUrl("https://evil.io/"))
         assertNull(site.pageUrl("/a b"))

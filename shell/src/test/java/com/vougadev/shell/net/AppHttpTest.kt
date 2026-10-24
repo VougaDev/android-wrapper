@@ -7,7 +7,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** The header rules every native call obeys (PIVO's `net/PivoHttp.kt`). */
+/** The header rules every native call obeys. */
 class AppHttpTest {
 
     private val origin = AppOrigin("https://app.example.org/")

@@ -13,9 +13,9 @@ class AuthEndpointsTest {
 
     private val client = AuthClient("https://auth.example.org", "test-client", "org.example.app:/oauth2redirect")
     private val discovery = Discovery.parse(
-        """{"issuer": "https://auth.example.org", "authorization_endpoint": "https://auth.example.org/identity/o/authorize",
-            "token_endpoint": "https://auth.example.org/identity/o/api/token",
-            "revocation_endpoint": "https://auth.example.org/identity/o/api/revoke"}""",
+        """{"issuer": "https://auth.example.org", "authorization_endpoint": "https://auth.example.org/oauth/authorize",
+            "token_endpoint": "https://auth.example.org/oauth/token",
+            "revocation_endpoint": "https://auth.example.org/oauth/revoke"}""",
     )!!
 
     private fun form(request: okhttp3.Request) = Buffer().also { request.body!!.writeTo(it) }.readUtf8()
@@ -23,7 +23,7 @@ class AuthEndpointsTest {
     @Test
     fun theRefreshIsAFormPostOfThePublicClient() {
         val r = AuthEndpoints.refreshRequest(discovery.tokenEndpoint, client.clientId, "rt-1")
-        assertEquals("https://auth.example.org/identity/o/api/token", r.url.toString())
+        assertEquals("https://auth.example.org/oauth/token", r.url.toString())
         assertEquals("POST", r.method)
         assertEquals("grant_type=refresh_token&refresh_token=rt-1&client_id=test-client", form(r))
         assertNull(r.header("Authorization"))
@@ -32,7 +32,7 @@ class AuthEndpointsTest {
     @Test
     fun theRevocationNamesTheRefreshToken() {
         val r = AuthEndpoints.revokeRequest(discovery.revocationEndpoint!!, client.clientId, "rt-1")
-        assertEquals("https://auth.example.org/identity/o/api/revoke", r.url.toString())
+        assertEquals("https://auth.example.org/oauth/revoke", r.url.toString())
         assertEquals("token=rt-1&token_type_hint=refresh_token&client_id=test-client", form(r))
     }
 

@@ -32,12 +32,22 @@ object LinkPolicy {
 
     private val BLOCKED = setOf("file", "content", "javascript", "data", "blob", "about", "chrome", "android-app")
 
-    /** [path] is the URL's path (no query); it decides between the site's pages and sign-in. */
-    fun decide(scheme: String?, isSite: Boolean, isAuth: Boolean, isNativeRoute: Boolean, path: String? = null): Decision {
+    /**
+     * [path] is the URL's path (no query); it decides between the site's pages and sign-in. [authSignIn] are the account service's
+     * sign-in paths, the app's ([com.vougadev.shell.ShellConfig.authSignInPaths]).
+     */
+    fun decide(
+        scheme: String?,
+        isSite: Boolean,
+        isAuth: Boolean,
+        isNativeRoute: Boolean,
+        path: String? = null,
+        authSignIn: List<String> = emptyList(),
+    ): Decision {
         val s = scheme?.lowercase(Locale.ROOT) ?: return Decision.BLOCK
         return when {
             isSite && SignInRoute.isSiteSignIn(path) -> Decision.SIGN_IN
-            isAuth && SignInRoute.isAuthSignIn(path) -> Decision.SIGN_IN
+            isAuth && SignInRoute.isAuthSignIn(path, authSignIn) -> Decision.SIGN_IN
             isSite && isNativeRoute -> Decision.OPEN_NATIVE
             isSite -> Decision.LOAD_INSIDE
             s == "intent" -> Decision.OPEN_INTENT
@@ -51,17 +61,17 @@ object LinkPolicy {
  * The site's and the account service's sign-in and sign-out addresses, as the shell meets them in the WebView. Pure, tested on the JVM.
  *
  * - the site's `/auth/login/?next=<path>`, where a lost session is sent;
- * - the account service's authorization endpoint (`/identity/o/authorize`) and its sign-in pages (`/accounts/login/`, `/accounts/signup/`);
+ * - the account service's authorization endpoint and sign-in pages: the paths the app gives (`ShellConfig.authSignInPaths`);
  * - the site's sign-out: the web's form POSTs `/auth/logout/`.
  */
 object SignInRoute {
     const val SITE_SIGN_IN = "/auth/login/"
     const val SITE_SIGN_OUT = "/auth/logout/"
-    private val AUTH_SIGN_IN = listOf("/identity/o/authorize", "/accounts/login", "/accounts/signup")
 
     fun isSiteSignIn(path: String?): Boolean = path == SITE_SIGN_IN || path == SITE_SIGN_IN.trimEnd('/')
 
-    fun isAuthSignIn(path: String?): Boolean = path != null && AUTH_SIGN_IN.any { path.startsWith(it) }
+    /** [paths] are prefixes: `/login` also covers `/login/` and `/login/?next=...`'s path. */
+    fun isAuthSignIn(path: String?, paths: List<String>): Boolean = path != null && paths.any { path.startsWith(it) }
 
     /** The web's sign-out form: a top-level POST to the site's `/auth/logout/`. */
     fun isSignOut(method: String?, isSite: Boolean, path: String?): Boolean =

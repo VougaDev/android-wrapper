@@ -19,7 +19,7 @@ import com.google.android.gms.location.LocationSettingsRequest
 import com.google.android.gms.location.Priority
 
 /**
- * THE APP RAISES THE PROMPTS ITSELF (PIVO's rule): the location permission, then the system "Turn on location" dialog.
+ * THE APP RAISES THE PROMPTS ITSELF: the location permission, then the system "Turn on location" dialog.
  * The person answers system dialogs, never instructions; the screen speaks only after a refusal.
  *
  * Created as a property of the activity (its launchers must be registered before it starts). [ask] runs `then(true)`

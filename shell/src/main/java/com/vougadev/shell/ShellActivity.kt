@@ -81,7 +81,7 @@ import java.io.File
  *
  * Only the app's origin is ever loaded or granted anything. See [AppOrigin].
  *
- * THE BRIDGE IS `window.VougaDevNative`, the one name every VougaDev app uses (Echo, 2026-10-23): `platform()`,
+ * THE BRIDGE IS `window.VougaDevNative`, the one name every VougaDev app uses: `platform()`,
  * `version()` and the app's [bridgeMethods] ([NativeShim], [NativeBridge]), injected with `addWebMessageListener` and
  * `addDocumentStartJavaScript` restricted to the app's origin, never `addJavascriptInterface`.
  */
@@ -249,7 +249,7 @@ abstract class ShellActivity : AppCompatActivity() {
 
         clearOldCaptures()
         val asked = if (savedInstanceState == null) pageFrom(intent) else null
-        // THE FIRST LOAD WAITS FOR THE WINDOW (PIVO, measured on WP35): a renderer requested before the WebView is
+        // THE FIRST LOAD WAITS FOR THE WINDOW (measured on a low-end phone): a renderer requested before the WebView is
         // attached was refused by the system, and the page stayed black until a reboot.
         firstLoad = { boot(asked, savedInstanceState) }
     }
@@ -519,7 +519,7 @@ abstract class ShellActivity : AppCompatActivity() {
             val uri = request.url
             val isSite = origin.matches(uri)
             val screen = if (isSite) nativeScreen(uri.path) else null
-            return when (LinkPolicy.decide(uri.scheme, isSite, auth.matches(uri), screen != null, uri.path)) {
+            return when (LinkPolicy.decide(uri.scheme, isSite, auth.matches(uri), screen != null, uri.path, session.config.authSignInPaths)) {
                 LinkPolicy.Decision.LOAD_INSIDE -> false
                 LinkPolicy.Decision.SIGN_IN -> {
                     // NEVER SIGN IN IN THE WEBVIEW: the session is renewed, then the sign-in's `next` opens

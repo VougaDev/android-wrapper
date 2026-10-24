@@ -46,7 +46,7 @@ class SessionExchange(
     companion object {
         const val PATH = "/auth/app-session/"
 
-        /** No cookie (a bearer token is the whole proof, the view is CSRF-exempt), the site's Referer as on every call. */
+        /** No cookie (a bearer token is the whole proof, the endpoint asks no CSRF token), the site's Referer as on every call. */
         fun request(origin: AppOrigin, accessToken: String, userAgent: String, acceptLanguage: String): Request = Request.Builder()
             .url(origin.baseUrl + PATH)
             .header("Authorization", "Bearer $accessToken")
