@@ -1,0 +1,33 @@
+[versions]
+# The line every VougaDev app is on (AGP 9.4, built-in Kotlin): an app that includes this build keeps the same AGP.
+agp = "9.4.1"
+coreKtx = "1.19.1"
+junit = "4.13.2"
+appcompat = "1.8.0"
+material = "1.14.0"
+okhttp = "5.5.0"
+coroutines = "1.11.0"
+swipeRefresh = "1.1.0"
+# The WebView bridge (window.VougaDevNative): web message listener and document-start script.
+webkit = "1.17.1"
+playServicesLocation = "21.4.0"
+# Sign-in in the system browser (the account service refuses a WebView: Google and passkeys do not work there).
+appauth = "0.11.1"
+# Test only: android.jar's org.json is a stub that throws on the JVM.
+orgJson = "20260814"
+
+[libraries]
+androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+junit = { group = "junit", name = "junit", version.ref = "junit" }
+androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
+material = { group = "com.google.android.material", name = "material", version.ref = "material" }
+okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
+kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
+androidx-webkit = { group = "androidx.webkit", name = "webkit", version.ref = "webkit" }
+androidx-swiperefreshlayout = { group = "androidx.swiperefreshlayout", name = "swiperefreshlayout", version.ref = "swipeRefresh" }
+play-services-location = { group = "com.google.android.gms", name = "play-services-location", version.ref = "playServicesLocation" }
+appauth = { group = "net.openid", name = "appauth", version.ref = "appauth" }
+org-json = { group = "org.json", name = "json", version.ref = "orgJson" }
+
+[plugins]
+android-library = { id = "com.android.library", version.ref = "agp" }

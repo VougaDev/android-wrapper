@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Photos taken with the camera app for a page's file input; an app that writes elsewhere too overrides this file. -->
+<paths>
+    <cache-path name="captures" path="captures/" />
+</paths>

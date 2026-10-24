@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/root"
+    android:background="?android:colorBackground"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <!-- Pull-to-refresh over the page; web/PullGuard.kt decides whether the page itself is at its top. -->
+    <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+        android:id="@+id/pull"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <WebView
+            android:id="@+id/web"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+    </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
+
+    <!-- Shown when the page itself could not be loaded (no network, DNS, TLS). -->
+    <LinearLayout
+        android:id="@+id/error"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="?android:colorBackground"
+        android:clickable="true"
+        android:focusable="true"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:padding="32dp"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="@string/shell_load_error_title"
+            android:textAppearance="?attr/textAppearanceHeadline6" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:gravity="center"
+            android:text="@string/shell_load_error_text"
+            android:textAppearance="?attr/textAppearanceBody2" />
+
+        <Button
+            android:id="@+id/retry"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="@string/shell_load_error_retry" />
+    </LinearLayout>
+
+    <!--
+      The native sign-in (the account service's rule: never in a WebView). Shown while the session is renewed (progress only), when the
+      person must sign in (one button, which opens the account service in a Custom Tab), and while signing out. In the app's brand:
+      its `shell_*` colours and mark.
+    -->
+    <LinearLayout
+        android:id="@+id/signin"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/shell_signin_background"
+        android:clickable="true"
+        android:focusable="true"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:paddingHorizontal="32dp"
+        android:visibility="gone">
+
+        <ImageView
+            android:layout_width="144dp"
+            android:layout_height="144dp"
+            android:contentDescription="@null"
+            android:src="@drawable/shell_signin_mark" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/app_name"
+            android:textColor="@color/shell_signin_title"
+            android:textSize="34sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/signin_text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:gravity="center"
+            android:maxWidth="360dp"
+            android:text="@string/shell_signin_text"
+            android:textColor="@color/shell_signin_muted"
+            android:textSize="16sp" />
+
+        <ProgressBar
+            android:id="@+id/signin_progress"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginTop="32dp"
+            android:indeterminateTint="@color/shell_accent"
+            android:visibility="gone" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/signin_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="32dp"
+            android:minHeight="56dp"
+            android:paddingHorizontal="28dp"
+            android:text="@string/shell_signin_button"
+            android:textAllCaps="false"
+            android:textColor="@color/shell_on_accent"
+            android:textSize="17sp"
+            app:backgroundTint="@color/shell_accent"
+            app:cornerRadius="12dp" />
+    </LinearLayout>
+</FrameLayout>

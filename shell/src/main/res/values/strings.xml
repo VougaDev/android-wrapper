@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The shell's screens: the offline page, the sign-in, links and photos. An app may override any of them. -->
+    <string name="app_name" translatable="false">VougaDev</string>
+    <string name="shell_load_error_title">This page could not be loaded</string>
+    <string name="shell_load_error_text">Please check the connection and try again.</string>
+    <string name="shell_load_error_retry">Try again</string>
+    <string name="shell_no_app_for_link">No application on this phone can open this link.</string>
+    <string name="shell_signin_text">Sign in with your VougaDev account to continue.</string>
+    <string name="shell_signin_button">Sign in with VougaDev</string>
+    <string name="shell_signin_working">Opening your session…</string>
+    <string name="shell_signin_failed">The sign-in could not be completed. Please try again.</string>
+    <string name="shell_signin_offline">No connection: your session could not be opened. Please check the network and try again.</string>
+    <string name="shell_signin_no_browser">A web browser is required to sign in. Please install or enable one, then try again.</string>
+    <string name="shell_signing_out">Signing out…</string>
+    <string name="shell_file_chooser_title">Choose a photo</string>
+</resources>
