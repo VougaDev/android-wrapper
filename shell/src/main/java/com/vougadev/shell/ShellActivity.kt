@@ -133,7 +133,7 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
     // --- Offline: the pages kept on the phone ([PageCache]) -----------------------------------------------------------
 
     private lateinit var connectivity: Connectivity
-    private val capture by lazy { OfflineCapture(session, shell.pages) }
+    private val capture by lazy { OfflineCapture(session, shell.pages, getString(R.string.app_name)) }
 
     /** The same-origin files the page on screen asked for (written on WebView threads). */
     private val pageFiles: MutableSet<String> = ConcurrentHashMap.newKeySet()

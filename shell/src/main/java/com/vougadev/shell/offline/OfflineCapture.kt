@@ -12,12 +12,12 @@ import java.io.IOException
  * [PageCache], as the WebView's session. The page itself is read once more (a GET, as the WebView did); a file already
  * kept is read again only after [FRESH_MS], and a versioned one (`?v=`, or a hashed static name) never.
  */
-class OfflineCapture(private val session: AppSession, private val cache: PageCache) {
+class OfflineCapture(private val session: AppSession, private val cache: PageCache, private val appName: String) {
 
     suspend fun capture(pageUrl: String, files: Collection<String>) = withContext(Dispatchers.IO) {
         val jar = session.cookies.jar() ?: ""
         fetch(pageUrl, jar, "text/html")?.let { (type, body) ->
-            if (type.startsWith("text/html")) cache.put(pageUrl, type, body, isPage = true, title = PageCache.titleOf(String(body)))
+            if (type.startsWith("text/html")) cache.put(pageUrl, type, body, isPage = true, title = PageCache.nameOf(String(body), appName))
         }
         for (url in files) {
             val saved = cache.savedAt(url)

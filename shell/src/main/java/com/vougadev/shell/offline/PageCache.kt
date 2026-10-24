@@ -148,6 +148,18 @@ class PageCache(private val dir: File, private val capBytes: Long, private val c
             ?.replace(Regex("\\s+"), " ")?.let(::unescape)?.trim()?.ifEmpty { null }
 
         /**
+         * The screen's name for the offline list: the page's `<meta name="vougadev-screen" content="…">` when it says
+         * one (a home whose title is a slogan), else its title without the ` · <App>` the site adds.
+         */
+        fun nameOf(html: String, appName: String): String? {
+            val head = html.substringBefore("</head>")
+            val said = META.findAll(head).map { it.value }.firstOrNull { SCREEN.containsMatchIn(it) }
+                ?.let { CONTENT.find(it)?.groupValues?.get(2) }
+                ?.replace(Regex("\\s+"), " ")?.let(::unescape)?.trim()?.ifEmpty { null }
+            return said ?: titleOf(html)?.removeSuffix(" · $appName")?.trim()?.ifEmpty { null }
+        }
+
+        /**
          * Kept for offline: a same-origin GET, never the sign-in and sign-out addresses, of a type a page needs again.
          * [contentType] is the answer's (null before it is known).
          */
@@ -164,6 +176,9 @@ class PageCache(private val dir: File, private val capBytes: Long, private val c
         }
 
         private val TITLE = Regex("<title[^>]*>([\\s\\S]*?)</title>", RegexOption.IGNORE_CASE)
+        private val META = Regex("<meta\\b[^>]*>", RegexOption.IGNORE_CASE)
+        private val SCREEN = Regex("\\bname\\s*=\\s*[\"']?vougadev-screen\\b", RegexOption.IGNORE_CASE)
+        private val CONTENT = Regex("\\bcontent\\s*=\\s*([\"'])([\\s\\S]*?)\\1", RegexOption.IGNORE_CASE)
 
         private fun unescape(text: String) = text.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
             .replace("&quot;", "\"").replace("&#39;", "'").replace("&#x27;", "'")

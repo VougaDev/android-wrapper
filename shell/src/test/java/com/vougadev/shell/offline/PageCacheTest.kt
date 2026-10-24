@@ -78,6 +78,19 @@ class PageCacheTest {
     }
 
     @Test
+    fun `a saved screen is named by its vougadev-screen, else by its title without the app's name`() {
+        val home = "<html><head><meta name=\"vougadev-screen\" content=\"Accueil\"><title>Votre colis ne voyage plus au hasard · Ship</title></head>"
+        assertEquals("Accueil", PageCache.nameOf(home, "Ship"))
+        assertEquals("Accueil", PageCache.nameOf("<head><meta content='Accueil' name='vougadev-screen'></head>", "Ship"))
+        val unnamed = "<head><meta name=\"vougadev-screen\" content=\"\"><title>Mes envois · Ship</title></head>"
+        assertEquals("Mes envois", PageCache.nameOf(unnamed, "Ship"))
+        assertEquals("Mes envois", PageCache.nameOf("<head><title>Mes envois · Ship</title></head>", "Ship"))
+        assertEquals("Détails · Envoi", PageCache.nameOf("<head><title>Détails · Envoi</title></head>", "Ship"))
+        assertEquals("Ship", PageCache.nameOf("<head><title>Ship · Ship</title></head>", "Ship"))
+        assertNull(PageCache.nameOf("<head><meta name=\"description\" content=\"x\"></head><body><meta name=\"vougadev-screen\" content=\"No\"></body>", "Ship"))
+    }
+
+    @Test
     fun `a page's title is read for the list`() {
         assertEquals("Orders & more", PageCache.titleOf("<html><head><title>\n Orders &amp; more </title></head>"))
         assertNull(PageCache.titleOf("<html></html>"))
