@@ -6,8 +6,6 @@
     <string name="shell_load_error_text">The service is not answering at the moment.</string>
     <string name="shell_load_error_retry">Try again</string>
     <string name="shell_no_app_for_link">No application on this phone can open it.</string>
-    <string name="shell_signin_text">Sign in with your VougaDev account to continue.</string>
-    <string name="shell_signin_button">Sign in with VougaDev</string>
     <string name="shell_signin_working">Opening your session…</string>
     <string name="shell_signin_failed">The sign-in could not be completed. Please try again.</string>
     <string name="shell_signin_offline">No connection: your session could not be opened. Please check the network and try again.</string>

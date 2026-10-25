@@ -352,11 +352,7 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
                     when {
                         ModalBack.closedAModal(result) -> Unit
                         webView.canGoBack() -> webView.goBack()
-                        // Back out of the sign-in inside the app: its screen again.
-                        signInRequest != null -> {
-                            signInRequest = null
-                            show(SignInScreen.SIGN_IN)
-                        }
+                        // Back out of the account service's first screen: the app is left, as from any first screen.
                         else -> leaveOnBack()
                     }
                 }
@@ -377,8 +373,9 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
     }
 
     /**
-     * This start's first screen. Never signed in on this phone: the sign-in screen (cookies left by an earlier web
-     * sign-in are not the app's, they go). Signed in but the site's session gone: renewed first. Else the page.
+     * This start's first screen. Never signed in on this phone: the account service's sign-in, straight in the WebView
+     * (cookies left by an earlier web sign-in are not the app's, they go). Signed in but the site's session gone:
+     * renewed first. Else the page.
      */
     private fun boot(asked: Ask?, savedInstanceState: Bundle?) {
         val page = (asked as? Ask.Page)?.url
@@ -387,7 +384,7 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
             !session.signedIn -> {
                 forgetOnPhone()
                 afterSignIn = page
-                show(SignInScreen.SIGN_IN)
+                startInAppSignIn()
             }
             // NO NETWORK: what the person had, from the phone - never a renewal that cannot happen, never an error.
             !connectivity.online -> openOffline(page)
@@ -478,7 +475,8 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
 
     // --- Sign-in, renewal and sign-out ------------------------------------------------------------------------------
 
-    private enum class SignInScreen { WORKING, SIGNING_OUT, SIGN_IN, FAILED, NO_BROWSER, OFFLINE }
+    /** No screen of its own before the sign-in: only while a session opens or closes, and when that fails. */
+    private enum class SignInScreen { WORKING, SIGNING_OUT, FAILED, NO_BROWSER, OFFLINE }
 
     private fun show(screen: SignInScreen) {
         signInScreen = screen
@@ -490,13 +488,12 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
             when (screen) {
                 SignInScreen.WORKING -> R.string.shell_signin_working
                 SignInScreen.SIGNING_OUT -> R.string.shell_signing_out
-                SignInScreen.SIGN_IN -> R.string.shell_signin_text
                 SignInScreen.FAILED -> R.string.shell_signin_failed
                 SignInScreen.NO_BROWSER -> R.string.shell_signin_no_browser
                 SignInScreen.OFFLINE -> R.string.shell_signin_offline
             },
         )
-        signInButton.setText(if (screen == SignInScreen.OFFLINE) R.string.shell_load_error_retry else R.string.shell_signin_button)
+        signInButton.setText(R.string.shell_load_error_retry)
     }
 
     private fun hideSignIn() {
@@ -506,7 +503,7 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
 
     private fun onSignInButton() = when (signInScreen) {
         SignInScreen.OFFLINE -> renewThen(afterSignIn)
-        SignInScreen.SIGN_IN, SignInScreen.FAILED, SignInScreen.NO_BROWSER -> startInAppSignIn()
+        SignInScreen.FAILED, SignInScreen.NO_BROWSER -> startInAppSignIn()
         else -> Unit
     }
 
@@ -516,7 +513,7 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
             renewThen(next)
         } else {
             afterSignIn = next
-            show(SignInScreen.SIGN_IN)
+            startInAppSignIn()
         }
     }
 
@@ -533,7 +530,7 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
                 Renewal.RENEWED -> sessionOpen(newSignIn = false)
                 Renewal.SIGN_IN -> {
                     forgetLocalData()
-                    show(SignInScreen.SIGN_IN)
+                    startInAppSignIn()
                 }
                 // No network to renew with: the pages kept on the phone meanwhile; the network's return renews.
                 Renewal.OFFLINE -> {
@@ -592,7 +589,7 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
 
     private fun signInDone(outcome: BrowserSignIn.Outcome) {
         when (outcome) {
-            BrowserSignIn.Outcome.Cancelled -> show(SignInScreen.SIGN_IN)
+            BrowserSignIn.Outcome.Cancelled -> show(SignInScreen.FAILED)
             BrowserSignIn.Outcome.Failed -> show(SignInScreen.FAILED)
             is BrowserSignIn.Outcome.Done -> when (outcome.renewal) {
                 Renewal.RENEWED -> sessionOpen(newSignIn = true)
@@ -687,7 +684,7 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
             }
             Consent.setCookie(this@ShellActivity)
             afterSignIn = null
-            show(SignInScreen.SIGN_IN)
+            startInAppSignIn()
         }
     }
 
@@ -925,6 +922,8 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
                     true
                 }
                 LinkPolicy.Decision.OPEN_THIRD_PARTY -> {
+                    // A step of the account service's sign-in on another site (Telegram's login): inside, with it.
+                    if (signInRequest != null && auth.matches(view.url)) return false
                     openThirdParty(uri)
                     true
                 }

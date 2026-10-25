@@ -147,7 +147,7 @@
             android:layout_marginTop="12dp"
             android:gravity="center"
             android:maxWidth="360dp"
-            android:text="@string/shell_signin_text"
+            android:text="@string/shell_signin_working"
             android:textColor="@color/shell_signin_muted"
             android:textSize="16sp" />
 
@@ -166,7 +166,7 @@
             android:layout_marginTop="32dp"
             android:minHeight="56dp"
             android:paddingHorizontal="28dp"
-            android:text="@string/shell_signin_button"
+            android:text="@string/shell_load_error_retry"
             android:textAllCaps="false"
             android:textColor="@color/shell_on_accent"
             android:textSize="17sp"

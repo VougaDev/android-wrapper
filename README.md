@@ -42,8 +42,9 @@ the phone. An app's own extensions add theirs. An extension the app does not hav
 - **One app, one WebView.** The app's site, the company's other domains and subdomains (`companyDomains`) and the
   account service's screens load in the same WebView, with the native back; never the browser. Only third parties
   leave: their site in an in-app browser sheet, phone, e-mail, maps and chat in the phone's apps.
-- **Sign-in inside the app.** AppAuth's request (code, PKCE S256, `ui_locales`) loads the account service's sign-in
-  in the WebView; its redirect to `<applicationId>:/oauth2redirect` is caught there, the state checked and the code
+- **Sign-in inside the app.** No screen of the app's own before it: signed out, the app loads AppAuth's request (code,
+  PKCE S256, `ui_locales`) straight into the WebView - the account service's sign-in, sign-up, account chooser and
+  first-sign-in steps, and a third party's step of it (Telegram's), all inside; its redirect to `<applicationId>:/oauth2redirect` is caught there, the state checked and the code
   exchanged. The site's own sign-in (`/auth/login/`) never loads in the app: a link to it renews the session, or, when
   it carries `prompt=create` (sign-up), `prompt=login|select_account` or `max_age`, starts the account service's with
   them, keeping `next`. Google signs in natively (`nativeSignIn({provider: "google", nonce})`, Credential Manager, an
@@ -105,7 +106,7 @@ the phone. An app's own extensions add theirs. An extension the app does not hav
    a notification opens, what it keeps of the person, its Settings rows).
 5. Brand it with resources of the same names: `app_name`, the colours `shell_signin_background`, `shell_signin_title`,
    `shell_signin_muted`, `shell_accent`, `shell_on_accent`, `shell_pull`, the drawables `shell_signin_mark` and
-   `shell_notification_icon`, the strings `shell_signin_text` and `shell_notifications_reason` and the extensions' texts
+   `shell_notification_icon`, the string `shell_notifications_reason` and the extensions' texts
    (each language), and `xml/shell_file_paths` if the app writes photos elsewhere too.
 6. The site answers `POST /auth/app-session/` (bearer token in, session cookie out), takes the push token, reads the
    user agent, calls `openSettings()` from "Privacy and data", and shows no install prompt and no cookie banner in the

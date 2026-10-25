@@ -4,8 +4,6 @@
     <string name="shell_load_error_text">Le service ne répond pas pour le moment.</string>
     <string name="shell_load_error_retry">Réessayer</string>
     <string name="shell_no_app_for_link">Aucune application de ce téléphone ne peut l\'ouvrir.</string>
-    <string name="shell_signin_text">Connectez-vous avec votre compte VougaDev pour continuer.</string>
-    <string name="shell_signin_button">Se connecter avec VougaDev</string>
     <string name="shell_signin_working">Ouverture de votre session…</string>
     <string name="shell_signin_failed">La connexion n\'a pas pu aboutir. Veuillez réessayer.</string>
     <string name="shell_signin_offline">Aucune connexion : votre session n\'a pas pu être ouverte. Veuillez vérifier le réseau et réessayer.</string>
