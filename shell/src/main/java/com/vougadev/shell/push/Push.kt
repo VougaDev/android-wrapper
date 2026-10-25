@@ -36,7 +36,8 @@ import java.util.concurrent.atomic.AtomicBoolean
  * [com.vougadev.shell.ShellConfig.pushDevicesPath]. Off, Firebase is never asked anything.
  *
  * The phone's token goes to the site ([Bodies.report]), which hands it to the notification hub: after each sign-in,
- * once per app start while signed in, and whenever Firebase rotates it; it is forgotten there on sign-out.
+ * once per app start while signed in, and whenever Firebase rotates it; it is forgotten there on sign-out, and while
+ * notifications are refused or turned off (the person is then reached another way; the next start reports it again).
  */
 object Push {
 
@@ -78,6 +79,11 @@ object Push {
         val shell = Shell.of(context)
         val path = shell.config.pushDevicesPath ?: return
         if (!shell.session.signedIn) return
+        if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) {
+            // Refused or turned off: the site must not count on this phone, it reaches the person another way.
+            scope.launch { forget(context, shell.session.caller()) }
+            return
+        }
         scope.launch {
             val body = Bodies.report(token, Build.MODEL.orEmpty(), shell.config.appSlug, Locale.getDefault().toLanguageTag())
             val answer = shell.session.caller().putJson(path, body)

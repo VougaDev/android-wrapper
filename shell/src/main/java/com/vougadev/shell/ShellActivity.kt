@@ -226,6 +226,7 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
     private var afterNotifications: (() -> Unit)? = null
 
     private val notificationsLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
+        Push.afterSignIn(this) // the token is reported only once notifications are allowed
         afterNotifications?.also { afterNotifications = null }?.invoke()
     }
 
