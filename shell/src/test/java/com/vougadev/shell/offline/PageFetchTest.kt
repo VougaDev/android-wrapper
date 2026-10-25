@@ -6,6 +6,7 @@ import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.net.InetSocketAddress
 import java.util.concurrent.atomic.AtomicInteger
@@ -27,7 +28,7 @@ class PageFetchTest {
             }
             if (code == 302) exchange.responseHeaders.add("Location", "/auth/login/?next=/shipments/")
             exchange.responseHeaders.add("Content-Type", type)
-            exchange.responseHeaders.add("Set-Cookie", "messages=; Path=/")
+            SET_COOKIES.forEach { exchange.responseHeaders.add("Set-Cookie", it) }
             val bytes = body.toByteArray()
             exchange.sendResponseHeaders(code, if (bytes.isEmpty()) -1 else bytes.size.toLong())
             exchange.responseBody.use { it.write(bytes) }
@@ -36,6 +37,14 @@ class PageFetchTest {
     }
     private val base = "http://127.0.0.1:${server.address.port}"
     private val fetch = PageFetch(OkHttpClient.Builder().followRedirects(false).build())
+
+    private companion object {
+        val SET_COOKIES = listOf(
+            "csrftoken=t0k3n; expires=Mon, 25 Oct 2027 03:00:00 GMT; Max-Age=31449600; Path=/; SameSite=Lax; Secure",
+            "sessionid=s3ss; HttpOnly; Path=/; SameSite=Lax; Secure",
+            "lang=fr; Path=/",
+        )
+    }
 
     @After
     fun stop() = server.stop(0)
@@ -48,7 +57,9 @@ class PageFetchTest {
         assertEquals(200, answer.code)
         assertEquals("text/html", answer.mimeType)
         assertEquals("utf-8", answer.charset)
-        assertEquals(listOf("messages=; Path=/"), answer.setCookies)
+        // every cookie of the answer reaches the WebView's jar, attributes and all: the session, the CSRF token, the language
+        assertEquals(SET_COOKIES, answer.setCookies)
+        assertTrue(answer.headers.keys.none { it.equals("Set-Cookie", ignoreCase = true) })
         val kept = fetch.take("$base/shipments/#top")!!
         assertArrayEquals(answer.body, kept.body)
         assertEquals(1, hits.get())
