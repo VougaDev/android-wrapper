@@ -93,6 +93,12 @@ the phone. An app's own extensions add theirs. An extension the app does not hav
    // settings.gradle.kts
    includeBuild("wrapper")
    // app/build.gradle.kts
+   plugins {
+       alias(libs.plugins.android.application)
+       alias(libs.plugins.google.services) apply false   // same entry as this repository's catalog
+   }
+   // Push: on as soon as the app's Firebase file is there (git-ignored, never in this repository).
+   if (file("google-services.json").isFile) apply(plugin = "com.google.gms.google-services")
    dependencies {
        implementation("com.vougadev:shell")
        implementation("com.vougadev:tracking")      // the extensions the app turns on
@@ -112,7 +118,13 @@ the phone. An app's own extensions add theirs. An extension the app does not hav
    `shell_signin_muted`, `shell_accent`, `shell_on_accent`, `shell_pull`, the drawables `shell_signin_mark` and
    `shell_notification_icon`, the string `shell_notifications_reason` and the extensions' texts
    (each language), and `xml/shell_file_paths` if the app writes photos elsewhere too.
-6. The site answers `POST /auth/app-session/` (bearer token in, session cookie out), takes the push token, reads the
+6. **Push notifications (required in every app):** add the app's package to VougaDev's Firebase project (Android
+   app, the release and debug SHA-1), put its `google-services.json` in `app/` (git-ignored) and set `pushDevicesPath`.
+   The shell does the rest: the permission after sign-in, the FCM token reported to the site
+   (`PUT <pushDevicesPath>` `{kind: "fcm", token, label, app, platform: "android", locale}`, `POST …/forget` on sign-out
+   or when notifications are turned off), and a data-only message `{app, url, screen?, topic, id, title, body}` drawn
+   as a notification that opens its screen inside the app. VougaDev's notification service sends them.
+7. The site answers `POST /auth/app-session/` (bearer token in, session cookie out), takes the push token, reads the
    user agent, calls `openSettings()` from "Privacy and data", and shows no install prompt and no cookie banner in the
    app.
 

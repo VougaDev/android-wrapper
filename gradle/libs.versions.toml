@@ -17,6 +17,8 @@ preference = "1.2.1"
 browser = "1.9.0"
 # Push: compiled in, started only when the app was built with its Firebase file (never in this repository).
 firebaseBom = "34.19.0"
+# The app applies it (never this library) when its Firebase file is present: README, "Using it in an app".
+googleServices = "4.5.0"
 credentials = "1.5.0"
 googleid = "1.1.1"
 # Test only: android.jar's org.json is a stub that throws on the JVM.
@@ -44,3 +46,4 @@ org-json = { group = "org.json", name = "json", version.ref = "orgJson" }
 
 [plugins]
 android-library = { id = "com.android.library", version.ref = "agp" }
+google-services = { id = "com.google.gms.google-services", version.ref = "googleServices" }
