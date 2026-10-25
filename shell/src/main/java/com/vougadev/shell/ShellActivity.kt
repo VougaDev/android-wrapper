@@ -425,7 +425,8 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
     }
 
     override fun onPause() {
-        if (webViewAlive) webView.onPause()
+        // Not under our own location dialog: a paused WebView forgets its answer and, resumed, asks again - for ever.
+        if (webViewAlive && !location.asking) webView.onPause()
         // The session cookie is what native calls are made with; get it to disk now.
         CookieManager.getInstance().flush()
         super.onPause()

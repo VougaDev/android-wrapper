@@ -28,7 +28,9 @@ import com.google.android.gms.location.Priority
 class LocationAsk(private val activity: ComponentActivity) {
 
     private val waiting = mutableListOf<(Boolean) -> Unit>()
-    private var asking = false
+    /** A permission or "Turn on location" dialog of ours is up: the page that asked keeps running under it. */
+    var asking = false
+        private set
 
     private val permissionLauncher = activity.registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         if (allowed()) ensureOn() else answer(false)
