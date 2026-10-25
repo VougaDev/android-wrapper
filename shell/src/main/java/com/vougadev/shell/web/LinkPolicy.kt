@@ -132,7 +132,11 @@ object SignInRoute {
 
     /** The web's sign-out form: a top-level POST to the site's `/auth/logout/`. */
     fun isSignOut(method: String?, isSite: Boolean, path: String?): Boolean =
-        isSite && method.equals("POST", ignoreCase = true) && (path == SITE_SIGN_OUT || path == SITE_SIGN_OUT.trimEnd('/'))
+        method.equals("POST", ignoreCase = true) && isSignOutPage(isSite, path)
+
+    /** The site's `/auth/logout/`: the blank page the shell answers it with while it signs out is no edge's error. */
+    fun isSignOutPage(isSite: Boolean, path: String?): Boolean =
+        isSite && (path == SITE_SIGN_OUT || path == SITE_SIGN_OUT.trimEnd('/'))
 
     /**
      * Where to go once signed in: the sign-in's `next` when it is a page of the site's own (never the sign-in or sign-out

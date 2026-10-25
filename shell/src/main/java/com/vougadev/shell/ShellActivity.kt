@@ -1008,6 +1008,8 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
         override fun onPageFinished(view: WebView, url: String?) {
             pull.isRefreshing = false
             if (url == null) return
+            // the sign-out's blank answer (shouldInterceptRequest): the app is signing out, never offline
+            if (SignInRoute.isSignOutPage(origin.matches(url), url.toUri().path)) return
             val key = PageCache.keyOf(url)
             val keptAt = servedFromPhone[key]
             if (keptAt != null) {

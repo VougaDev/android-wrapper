@@ -48,6 +48,8 @@ class SignInRouteTest {
         assertFalse(SignInRoute.isSignOut("GET", isSite = true, path = "/auth/logout/"))
         assertFalse(SignInRoute.isSignOut("POST", isSite = false, path = "/auth/logout/"))
         assertFalse(SignInRoute.isSignOut("POST", isSite = true, path = "/orders/"))
+        assertTrue(SignInRoute.isSignOutPage(isSite = true, path = "/auth/logout/"))
+        assertFalse(SignInRoute.isSignOutPage(isSite = false, path = "/auth/logout/"))
     }
 
     @Test
