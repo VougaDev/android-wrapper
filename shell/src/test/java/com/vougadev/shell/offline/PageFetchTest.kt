@@ -22,10 +22,12 @@ class PageFetchTest {
             seen = exchange.requestHeaders.mapValues { it.value.joinToString(",") }.mapKeys { it.key.lowercase() }
             val (code, type, body) = when (exchange.requestURI.path) {
                 "/shipments/" -> Triple(200, "text/html; charset=utf-8", "<title>Mes envois · Ship</title>")
+                "/private/" -> Triple(200, "text/html; charset=utf-8", "<title>Dossier · App</title>")
                 "/gone/" -> Triple(404, "text/html; charset=utf-8", "<p>introuvable</p>")
                 "/label.pdf" -> Triple(200, "application/pdf", "%PDF")
                 else -> Triple(302, "text/html", "")
             }
+            if (exchange.requestURI.path == "/private/") exchange.responseHeaders.add("Cache-Control", "max-age=0, No-Store, private")
             if (code == 302) exchange.responseHeaders.add("Location", "/auth/login/?next=/shipments/")
             exchange.responseHeaders.add("Content-Type", type)
             SET_COOKIES.forEach { exchange.responseHeaders.add("Set-Cookie", it) }
@@ -94,5 +96,14 @@ class PageFetchTest {
     fun noNetworkLeavesThePageToTheWebViewsErrorAndTheOfflineScreens() {
         server.stop(0)
         assertNull(get("/shipments/"))
+    }
+
+    @Test
+    fun aNoStorePageIsShownButNeverKept() {
+        assertEquals(200, get("/private/")!!.code)
+        assertNull(fetch.take("$base/private/"))
+        assertTrue(PageFetch.keeps("max-age=0, must-revalidate"))
+        assertTrue(PageFetch.keeps(null))
+        assertEquals(false, PageFetch.keeps("private, no-store"))
     }
 }

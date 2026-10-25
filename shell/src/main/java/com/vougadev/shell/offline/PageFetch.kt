@@ -55,7 +55,8 @@ class PageFetch(private val client: OkHttpClient) {
                 if (response.code !in SERVABLE || mime != "text/html" || length > MAX_BYTES) return null
                 val body = response.body.bytes()
                 if (body.size > MAX_BYTES) return null
-                if (response.code == 200) held = Page(url, type, body)
+                // A page the site marks `no-store` (a medical file, a prescription) is shown, never kept on the phone.
+                if (response.code == 200 && keeps(response.header("Cache-Control"))) held = Page(url, type, body)
                 val passed = response.headers.names().filterNot { it.equals("Set-Cookie", true) || it.equals("Content-Length", true) }
                 Answer(
                     code = response.code,
@@ -82,6 +83,10 @@ class PageFetch(private val client: OkHttpClient) {
 
     companion object {
         const val MAX_BYTES = 2L * 1024 * 1024
+
+        /** Whether a page answered with this `Cache-Control` may be kept for offline use: never with `no-store`. Pure. */
+        fun keeps(cacheControl: String?): Boolean =
+            cacheControl.orEmpty().split(',').none { it.trim().substringBefore('=').equals("no-store", ignoreCase = true) }
 
         /** What a WebResourceResponse may carry: never a redirect (the WebView would not follow it). */
         private val SERVABLE = (200..299) + (400..599)

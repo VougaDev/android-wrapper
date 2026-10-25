@@ -71,6 +71,7 @@ import com.vougadev.shell.net.AppHttp
 import com.vougadev.shell.net.SessionCookies
 import com.vougadev.shell.web.AppOrigin
 import com.vougadev.shell.web.LinkPolicy
+import com.vougadev.shell.web.MediaGrant
 import com.vougadev.shell.web.ModalBack
 import com.vougadev.shell.web.NativeBridge
 import com.vougadev.shell.web.NativeShim
@@ -1163,8 +1164,19 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
             location.ask { callback.invoke(requestOrigin, location.allowed(), false) }
         }
 
-        /** The site's pages do not stream the camera or the microphone. */
-        override fun onPermissionRequest(request: PermissionRequest) = request.deny()
+        /**
+         * The camera and the microphone, for a video call on the site's own pages: only when the app declares them in its
+         * manifest, after the system's dialog, and only what the person allowed. Anything else, or any other origin, is
+         * refused.
+         */
+        override fun onPermissionRequest(request: PermissionRequest) {
+            val wanted = MediaGrant.permissionsFor(request.resources)
+            if (wanted == null || !origin.matches(request.origin.toString()) || !wanted.values.all(::declares)) return request.deny()
+            requestPermissions(wanted.values.distinct().toTypedArray()) {
+                val allowed = wanted.filterValues(::granted).keys
+                if (allowed.isEmpty()) request.deny() else request.grant(allowed.toTypedArray())
+            }
+        }
 
         override fun onShowFileChooser(view: WebView, callback: ValueCallback<Array<Uri>>, params: FileChooserParams): Boolean {
             // A form of the site, or nothing: a foreign page has no business with the person's photos.
@@ -1172,7 +1184,13 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
             fileCallback?.onReceiveValue(null)
             fileCallback = callback
             val acceptsImages = params.acceptTypes.all { it.isBlank() } || params.acceptTypes.any { it.startsWith("image") }
-            launchChooser(params, withCamera = acceptsImages)
+            // An app that declares CAMERA (for calls) may start the camera app only once it holds the permission.
+            val camera = Manifest.permission.CAMERA
+            if (acceptsImages && declares(camera) && !granted(camera)) {
+                requestPermissions(arrayOf(camera)) { launchChooser(params, withCamera = granted(camera)) }
+            } else {
+                launchChooser(params, withCamera = acceptsImages)
+            }
             return true
         }
     }
@@ -1195,7 +1213,16 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
         }
     }
 
-    /** The camera app, writing into the app's cache (no CAMERA permission is declared, so none is needed). */
+    /** Whether the app's manifest asks for [permission]: the shell never asks what the app did not declare. */
+    private fun declares(permission: String): Boolean = try {
+        packageManager.getPackageInfo(packageName, PackageManager.GET_PERMISSIONS).requestedPermissions.orEmpty().contains(permission)
+    } catch (_: PackageManager.NameNotFoundException) {
+        false
+    }
+
+    private fun granted(permission: String) = ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
+
+    /** The camera app, writing into the app's cache (no permission needed unless the app declares CAMERA). */
     private fun cameraIntent(): Intent? {
         val dir = File(cacheDir, CAPTURES_DIR).apply { mkdirs() }
         val file = File(dir, "photo-${System.currentTimeMillis()}.jpg")

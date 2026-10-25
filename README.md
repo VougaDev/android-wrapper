@@ -73,6 +73,9 @@ the phone. An app's own extensions add theirs. An extension the app does not hav
 - **Consent**, when the app declares purposes: a native dialog asked once, never the website's banner; the choice is
   answered by `consent()` and set as the first-party cookie `vougadev_consent` (`analytics:1|ads:0`), from which the
   site hides its own banner.
+- **Camera and microphone** (a video call over WebRTC on the site's pages): granted to the app's own origin only when
+  the app declares `CAMERA` / `RECORD_AUDIO` in its manifest, after the system's dialog; refused otherwise.
+- **A page answered `Cache-Control: no-store`** (a medical file, a prescription) is shown but never kept for offline.
 - **No install prompt** anywhere; a site hides its own when `VougaDevNative` is present.
 - **Offline, never a dead end.** The pages the person visited and their same-origin files are kept on the phone (a size
   cap, cleared on sign-out) and served with no network under a quiet "Offline · updated at HH:MM" bar. The app starts
