@@ -938,6 +938,11 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
                     openOutside(uri)
                     true
                 }
+                // The WebView stays where it was: the page that sent the person to the app redraws itself on return.
+                LinkPolicy.Decision.OPEN_IN_ITS_APP -> {
+                    openInItsApp(uri)
+                    true
+                }
                 LinkPolicy.Decision.OPEN_INTENT -> {
                     openIntentUrl(uri.toString())
                     true
@@ -1097,6 +1102,17 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
             CustomTabsIntent.Builder().setDefaultColorSchemeParams(colors).setShowTitle(true).build().launchUrl(this, uri)
         } catch (_: ActivityNotFoundException) {
             openOutside(uri)
+        }
+    }
+
+    /** A chat app's web address: that app when installed (never a browser for it), else the in-app browser sheet. */
+    private fun openInItsApp(uri: Uri) {
+        val intent = Intent(Intent.ACTION_VIEW, uri).addCategory(Intent.CATEGORY_BROWSABLE)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) intent.addFlags(Intent.FLAG_ACTIVITY_REQUIRE_NON_BROWSER)
+        try {
+            startActivity(intent)
+        } catch (_: ActivityNotFoundException) {
+            openThirdParty(uri)
         }
     }
 

@@ -37,6 +37,9 @@ object LinkPolicy {
         /** `tel:`, `mailto:`, `geo:`, a maps or chat app's scheme: the phone's own app. */
         OPEN_APP,
 
+        /** A chat app's own web address (Telegram's bot links): that app, else an in-app browser sheet - never inside. */
+        OPEN_IN_ITS_APP,
+
         /** An `intent:` URL: parsed, stripped of any explicit component, then started. */
         OPEN_INTENT,
 
@@ -45,6 +48,13 @@ object LinkPolicy {
     }
 
     private val BLOCKED = setOf("file", "content", "javascript", "data", "blob", "about", "chrome", "android-app")
+
+    /**
+     * Web addresses that belong to a phone app, tapped or reached by a redirect (the account service's "Connect
+     * Telegram" answers with `t.me/<bot>?start=…`): never loaded in the WebView. Telegram's sign-in step
+     * (`oauth.telegram.org`) is not one of them: it stays inside.
+     */
+    val IN_ITS_APP_HOSTS = listOf("t.me", "telegram.me")
 
     /** Logins of other companies that refuse an embedded WebView. */
     val SIGN_IN_ELSEWHERE_HOSTS = setOf("accounts.google.com", "appleid.apple.com")
@@ -72,6 +82,7 @@ object LinkPolicy {
             isSite -> Decision.LOAD_INSIDE
             s == "https" && isCompany(h, companyDomains) -> Decision.LOAD_INSIDE
             web && h in SIGN_IN_ELSEWHERE_HOSTS -> Decision.SIGN_IN_ELSEWHERE
+            web && isCompany(h, IN_ITS_APP_HOSTS) -> Decision.OPEN_IN_ITS_APP
             web && isCompany(h, outsideHosts) -> Decision.OUTSIDE_STEP
             // A step of a flow (a redirect, nobody tapped): it stays in the WebView while it works there.
             web && !userTapped -> Decision.LOAD_INSIDE

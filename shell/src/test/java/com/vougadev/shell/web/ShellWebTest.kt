@@ -78,4 +78,15 @@ class ShellWebTest {
         assertFalse(PullGuard.blocks("\"pull\""))
         assertTrue(PullGuard.script(10.5f, 20f).contains("elementFromPoint(10.5,20.0)"))
     }
+
+    @Test
+    fun telegramsBotLinksOpenTelegramNeverTheWebView() {
+        // the account service's "Connect Telegram" answers with a redirect to the bot: tapped or not, the app
+        assertEquals(LinkPolicy.Decision.OPEN_IN_ITS_APP, decide("https", "t.me", tapped = false))
+        assertEquals(LinkPolicy.Decision.OPEN_IN_ITS_APP, decide("https", "t.me"))
+        assertEquals(LinkPolicy.Decision.OPEN_IN_ITS_APP, decide("https", "Telegram.me", tapped = false))
+        // Telegram's sign-in step, met during the account service's sign-in: inside, with it
+        assertEquals(LinkPolicy.Decision.LOAD_INSIDE, decide("https", "oauth.telegram.org", tapped = false))
+        assertEquals(LinkPolicy.Decision.OPEN_THIRD_PARTY, decide("https", "t.me.example.net"))
+    }
 }
