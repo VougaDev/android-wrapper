@@ -10,8 +10,9 @@ import java.io.IOException
  * instead of asking the site for it a second time.
  *
  * Null - the WebView fetches the page itself - for what it must handle on its own: a redirect (it follows it, and the
- * shell catches the sign-in's), a page that is not HTML, one too big to hold, and a network failure (its error then
- * leads to the offline screens).
+ * shell catches the sign-in's), a page that is not HTML, one too big to hold. A network failure THROWS: a network that
+ * says it is up and carries nothing (a Wi-Fi without internet) is offline at once, never minutes of a blank screen
+ * while the WebView tries again.
  * shortcut: those answers are read twice (this request, then the WebView's); upgrade if a site redirects often.
  */
 class PageFetch(private val client: OkHttpClient) {
@@ -36,6 +37,7 @@ class PageFetch(private val client: OkHttpClient) {
      * [headers] are the WebView's request's; [cookies] its jar for [url]; [acceptLanguage] the phone's, when the WebView
      * gave none (the site answers in the screen's language). Called off the main thread.
      */
+    @Throws(IOException::class)
     fun fetch(url: String, headers: Map<String, String>, cookies: String?, userAgent: String, acceptLanguage: String): Answer? {
         val request = try {
             Request.Builder().url(url).get().apply {
@@ -47,8 +49,7 @@ class PageFetch(private val client: OkHttpClient) {
         } catch (_: IllegalArgumentException) {
             return null
         }
-        return try {
-            client.newCall(request).execute().use { response ->
+        return client.newCall(request).execute().use { response ->
                 val type = response.header("Content-Type").orEmpty()
                 val mime = type.substringBefore(';').trim().lowercase()
                 val length = response.body.contentLength()
@@ -68,9 +69,6 @@ class PageFetch(private val client: OkHttpClient) {
                     body = body,
                 )
             }
-        } catch (_: IOException) {
-            null
-        }
     }
 
     /** The HTML the WebView was given for [url], once; null when it fetched the page itself. */
@@ -83,6 +81,9 @@ class PageFetch(private val client: OkHttpClient) {
 
     companion object {
         const val MAX_BYTES = 2L * 1024 * 1024
+
+        /** A page the site has not answered in this long is offline: the person sees what the phone kept instead. */
+        const val PAGE_SECONDS = 15L
 
         /** Whether a page answered with this `Cache-Control` may be kept for offline use: never with `no-store`. Pure. */
         fun keeps(cacheControl: String?): Boolean =

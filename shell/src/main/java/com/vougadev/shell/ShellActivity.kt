@@ -136,7 +136,7 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
 
     private lateinit var connectivity: Connectivity
     private val capture by lazy { OfflineCapture(session, shell.pages, getString(R.string.app_name)) }
-    private val pageFetch = PageFetch(AppHttp.client)
+    private val pageFetch = PageFetch(AppHttp.client.newBuilder().callTimeout(PageFetch.PAGE_SECONDS, java.util.concurrent.TimeUnit.SECONDS).build())
 
     /** The same-origin files the page on screen asked for (written on WebView threads). */
     private val pageFiles: MutableSet<String> = ConcurrentHashMap.newKeySet()
@@ -979,8 +979,18 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
                 return null
             }
             // EACH PAGE FETCHED ONCE: the WebView's answer and the copy kept for offline are the same read.
-            val answer = pageFetch.fetch(url.toString(), request.requestHeaders, CookieManager.getInstance().getCookie(url.toString()), session.userAgent, session.acceptLanguage())
-                ?: return null
+            val answer = try {
+                pageFetch.fetch(url.toString(), request.requestHeaders, CookieManager.getInstance().getCookie(url.toString()), session.userAgent, session.acceptLanguage())
+            } catch (_: java.io.IOException) {
+                // Android said online, the site never answered: offline now - the page as the phone kept it, else the
+                // offline screen with what is kept - never a blank screen while the WebView tries again for minutes.
+                forcedOffline = true
+                return fromPhone(request) ?: run {
+                    val failed = url.toString()
+                    runOnUiThread { failedUrl = failed; showUnavailable(failed) }
+                    WebResourceResponse("text/html", "utf-8", ByteArrayInputStream(ByteArray(0)))
+                }
+            } ?: return null
             val cookies = CookieManager.getInstance()
             answer.setCookies.forEach { cookies.setCookie(url.toString(), it) }
             if (answer.code >= 400) httpStatus[PageCache.keyOf(url.toString())] = answer.code

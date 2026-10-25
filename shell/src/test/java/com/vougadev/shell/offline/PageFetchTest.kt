@@ -6,6 +6,7 @@ import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.net.InetSocketAddress
@@ -93,9 +94,16 @@ class PageFetchTest {
     }
 
     @Test
-    fun noNetworkLeavesThePageToTheWebViewsErrorAndTheOfflineScreens() {
+    fun noNetworkIsOfflineAtOnce() {
         server.stop(0)
-        assertNull(get("/shipments/"))
+        assertThrows(java.io.IOException::class.java) { get("/shipments/") }
+    }
+
+    @Test
+    fun aSiteThatNeverAnswersIsOfflineAfterTheTimeLimit() {
+        server.createContext("/silent/") { Thread.sleep(5_000) }
+        val quick = PageFetch(OkHttpClient.Builder().callTimeout(1, java.util.concurrent.TimeUnit.SECONDS).build())
+        assertThrows(java.io.IOException::class.java) { quick.fetch("$base/silent/", emptyMap(), null, "UA", "fr-FR") }
     }
 
     @Test
