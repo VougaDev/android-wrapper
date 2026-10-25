@@ -3,6 +3,7 @@ package com.vougadev.shell.web
 import com.vougadev.shell.web.LinkPolicy.Decision
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -47,5 +48,18 @@ class SignInRouteTest {
         assertFalse(SignInRoute.isSignOut("GET", isSite = true, path = "/auth/logout/"))
         assertFalse(SignInRoute.isSignOut("POST", isSite = false, path = "/auth/logout/"))
         assertFalse(SignInRoute.isSignOut("POST", isSite = true, path = "/orders/"))
+    }
+
+    @Test
+    fun aSitesSignUpOrReAuthenticationIsAskedOfTheAccountService() {
+        assertEquals(SignInRoute.Asked("create", null), SignInRoute.Asked.of("create", null))
+        assertEquals(SignInRoute.Asked("login", 0), SignInRoute.Asked.of(" login ", "0"))
+        assertEquals(SignInRoute.Asked(null, 300), SignInRoute.Asked.of(null, "300"))
+        assertEquals(SignInRoute.Asked("select_account", null), SignInRoute.Asked.of("select_account", "soon"))
+        // a plain sign-in link asks nothing: the session is renewed silently
+        assertNull(SignInRoute.Asked.of(null, null))
+        // only the prompts the account service knows, never whatever the link carries
+        assertNull(SignInRoute.Asked.of("none", "-1"))
+        assertNull(SignInRoute.Asked.of("create consent", ""))
     }
 }

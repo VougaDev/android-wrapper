@@ -104,6 +104,21 @@ object SignInRoute {
 
     fun isSiteSignIn(path: String?): Boolean = path == SITE_SIGN_IN || path == SITE_SIGN_IN.trimEnd('/')
 
+    /**
+     * What a site's sign-in link asks of the account service's own sign-in: `prompt=create` (the sign-up form first),
+     * `login` or `select_account`, and `max_age` (re-authentication). Null when it asks nothing: the session is renewed.
+     */
+    data class Asked(val prompt: String?, val maxAge: Int?) {
+        companion object {
+            private val PROMPTS = setOf("create", "login", "select_account")
+
+            fun of(prompt: String?, maxAge: String?): Asked? {
+                val asked = Asked(prompt?.trim()?.takeIf { it in PROMPTS }, maxAge?.trim()?.toIntOrNull()?.takeIf { it >= 0 })
+                return if (asked.prompt == null && asked.maxAge == null) null else asked
+            }
+        }
+    }
+
     /** The web's sign-out form: a top-level POST to the site's `/auth/logout/`. */
     fun isSignOut(method: String?, isSite: Boolean, path: String?): Boolean =
         isSite && method.equals("POST", ignoreCase = true) && (path == SITE_SIGN_OUT || path == SITE_SIGN_OUT.trimEnd('/'))

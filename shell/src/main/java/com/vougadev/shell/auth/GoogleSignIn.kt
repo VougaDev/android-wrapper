@@ -12,7 +12,7 @@ import com.google.android.libraries.identity.googleid.GoogleIdTokenParsingExcept
 
 /**
  * SIGN IN WITH GOOGLE, NATIVELY: Google refuses its sign-in inside a WebView, so the account service's page asks the
- * app (`VougaDevNative.nativeSignIn({provider: "google"})`) and gets Google's ID token for its own client
+ * app (`VougaDevNative.nativeSignIn({provider: "google", nonce})`) and gets Google's ID token for its own client
  * ([com.vougadev.shell.ShellConfig.googleServerClientId]) with the account's address and name, which it checks and signs the
  * person in with.
  */
@@ -24,10 +24,12 @@ object GoogleSignIn {
         data object Failed : Result
     }
 
-    suspend fun signIn(activity: Activity, serverClientId: String): Result {
+    suspend fun signIn(activity: Activity, serverClientId: String, nonce: String? = null): Result {
         val option = GetGoogleIdOption.Builder()
             .setServerClientId(serverClientId)
             .setFilterByAuthorizedAccounts(false)
+            // the account service's page's one-time nonce: a token caught elsewhere is refused there
+            .setNonce(nonce)
             .build()
         val request = GetCredentialRequest.Builder().addCredentialOption(option).build()
         return try {

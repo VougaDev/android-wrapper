@@ -7,6 +7,7 @@ import androidx.browser.customtabs.CustomTabColorSchemeParams
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import com.vougadev.shell.R
+import com.vougadev.shell.web.SignInRoute
 import net.openid.appauth.AuthorizationException
 import net.openid.appauth.AuthorizationRequest
 import net.openid.appauth.AuthorizationResponse
@@ -44,7 +45,8 @@ class BrowserSignIn(private val context: Context, private val session: AppSessio
      * THE SIGN-IN INSIDE THE APP: the account service's authorization request (code + PKCE S256, the app's public client),
      * whose address the WebView loads. Null when the account service's discovery cannot be read (offline).
      */
-    suspend fun request(): AuthorizationRequest? {
+    /** The sign-in request, loaded in the WebView; [asked] is a site's sign-up (`prompt=create`) or re-authentication. */
+    suspend fun request(asked: SignInRoute.Asked? = null): AuthorizationRequest? {
         val discovery = session.discovery() ?: return null
         val config = try {
             AuthorizationServiceConfiguration(AuthorizationServiceDiscovery(discovery.json))
@@ -55,12 +57,14 @@ class BrowserSignIn(private val context: Context, private val session: AppSessio
             .setScope(session.config.scopes)
             // the account service's screens in the phone's language, as the web's own sign-in asks
             .setUiLocales(Locale.getDefault().language)
+            .setPrompt(asked?.prompt)
+            .setAdditionalParameters(asked?.maxAge?.let { mapOf("max_age" to it.toString()) } ?: emptyMap())
             .build()
     }
 
     /**
-     * The account service answered the sign-in inside the app: its redirect to the app's address, or its call
-     * `completeSignIn({code, state})`, as [answer] (`<redirect>?code=…&state=…`). The state must be [request]'s; the code
+     * The account service answered the sign-in inside the app: its redirect to the app's address, caught in the WebView,
+     * as [answer] (`<redirect>?code=…&state=…`). The state must be [request]'s; the code
      * is exchanged (PKCE) and the session opened.
      */
     suspend fun finish(request: AuthorizationRequest, answer: Uri): Outcome {

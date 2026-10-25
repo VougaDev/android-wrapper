@@ -29,8 +29,8 @@ The same on Android and iOS; a page branches on the platform only through `platf
 the phone. An app's own extensions add theirs. An extension the app does not have adds no member and no name.
 
 - A page tests for a feature: `window.VougaDevNative && VougaDevNative.features().includes("tracking")`.
-- Injected into the app's own origin with every member; into the account service's with `completeSignIn` and
-  `nativeSignIn` only; into each `trustedOrigins` origin (frames included) with `platform`, `version`, `features` and
+- Injected into the app's own origin with every member; into the account service's with `nativeSignIn` only
+  (when the app has the account service's Google client); into each `trustedOrigins` origin (frames included) with `platform`, `version`, `features` and
   `openOutside` only; never into any other origin, never through `addJavascriptInterface`
   (`addWebMessageListener` + `addDocumentStartJavaScript`).
 - Every Promise resolves, never rejects. The object is frozen.
@@ -42,10 +42,13 @@ the phone. An app's own extensions add theirs. An extension the app does not hav
 - **One app, one WebView.** The app's site, the company's other domains and subdomains (`companyDomains`) and the
   account service's screens load in the same WebView, with the native back; never the browser. Only third parties
   leave: their site in an in-app browser sheet, phone, e-mail, maps and chat in the phone's apps.
-- **Sign-in inside the app.** The account service's sign-in loads in the WebView and ends with
-  `VougaDevNative.completeSignIn({code, state})` on its origin (or its redirect to the app); Google signs in natively
-  (`nativeSignIn({provider: "google"})`, Credential Manager); passkeys through the WebView's WebAuthn support. A Custom
-  Tab only as the fallback while the account service does not hand other companies' logins to the app.
+- **Sign-in inside the app.** AppAuth's request (code, PKCE S256, `ui_locales`) loads the account service's sign-in
+  in the WebView; its redirect to `<applicationId>:/oauth2redirect` is caught there, the state checked and the code
+  exchanged. The site's own sign-in (`/auth/login/`) never loads in the app: a link to it renews the session, or, when
+  it carries `prompt=create` (sign-up), `prompt=login|select_account` or `max_age`, starts the account service's with
+  them, keeping `next`. Google signs in natively (`nativeSignIn({provider: "google", nonce})`, Credential Manager, an
+  ID token for the account service's Google client `googleServerClientId`); passkeys through the WebView's WebAuthn.
+  Without `googleServerClientId`, Google's sign-in falls back to a Custom Tab.
 - **Payment stays in the WebView.** The company's checkout is a company domain; a bank's or operator's step met on
   the way stays inside while it works there. Only a step that refuses WebViews (`outsideHosts`, or the checkout's
   `openOutside({url, returnUrl})` on a `trustedOrigins` origin) goes to Chrome's Auth Tab and comes back by itself
@@ -112,8 +115,9 @@ the phone. An app's own extensions add theirs. An extension the app does not hav
 
 - **At least one real native extension** that matters to its users' job, never a plain website loader (App Store
   guideline 4.2): background location for a task, offline maps or data, a scanner, native screens for the core flow.
-- **Sign-in inside the app:** the account service's screens in the WebView, ended by `completeSignIn` (PKCE); Google
-  and Apple natively (`nativeSignIn`); a Custom Tab (`ASWebAuthenticationSession` on iOS) only as the fallback.
+- **Sign-in inside the app:** the account service's screens in the WebView, ended by its redirect to the app (PKCE);
+  Google and Apple natively (`nativeSignIn`); a Custom Tab (`ASWebAuthenticationSession` on iOS) only as the fallback;
+  never the site's own web sign-in.
 - **No other platform named inside the app.** No self-update outside the store. Privacy policy and account deletion
   in Settings. A disclosure before background location. Notifications asked after sign-in, with a reason.
 

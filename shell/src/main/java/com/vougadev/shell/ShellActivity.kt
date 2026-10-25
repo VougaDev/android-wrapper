@@ -545,14 +545,14 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
     }
 
     /**
-     * SIGN-IN INSIDE THE APP: the account service's sign-in loads in this WebView (one app, one WebView). It ends with
-     * the account service's answer - its redirect to the app's address, or its call `completeSignIn({code, state})` -
-     * traded for the app's tokens ([finishInAppSignIn]).
+     * SIGN-IN INSIDE THE APP: the account service's sign-in (or, [asked], its sign-up) loads in this WebView (one app,
+     * one WebView). It ends with the account service's redirect to the app's address, caught in the WebView and traded
+     * for the app's tokens ([finishInAppSignIn]).
      */
-    private fun startInAppSignIn() {
+    private fun startInAppSignIn(asked: SignInRoute.Asked? = null) {
         show(SignInScreen.WORKING)
         lifecycleScope.launch {
-            val request = browser.request() ?: return@launch show(SignInScreen.OFFLINE)
+            val request = browser.request(asked) ?: return@launch show(SignInScreen.OFFLINE)
             signInRequest = request
             hideSignIn()
             errorView.visibility = View.GONE
@@ -560,21 +560,11 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
         }
     }
 
-    private fun finishInAppSignIn(answer: Uri, told: ((JSONObject) -> Unit)? = null) {
+    private fun finishInAppSignIn(answer: Uri) {
         val request = signInRequest ?: return show(SignInScreen.FAILED)
         signInRequest = null
         show(SignInScreen.WORKING)
-        lifecycleScope.launch {
-            val outcome = browser.finish(request, answer)
-            told?.invoke(
-                when {
-                    outcome is BrowserSignIn.Outcome.Done && outcome.renewal == Renewal.RENEWED -> NativeBridge.ok()
-                    outcome is BrowserSignIn.Outcome.Done && outcome.renewal == Renewal.OFFLINE -> NativeBridge.refused("offline")
-                    else -> NativeBridge.refused("exchange_refused")
-                },
-            )
-            signInDone(outcome)
-        }
+        lifecycleScope.launch { signInDone(browser.finish(request, answer)) }
     }
 
     /** The FALLBACK: the account service's sign-in in a Custom Tab, while another company's login refuses the WebView. */
@@ -911,8 +901,16 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
             return when (LinkPolicy.decide(uri.scheme, uri.host, isSite, screen != null, uri.path, session.config.companyDomains, session.config.outsideHosts, tapped)) {
                 LinkPolicy.Decision.LOAD_INSIDE -> false
                 LinkPolicy.Decision.SIGN_IN -> {
-                    // NEVER SIGN IN IN THE WEBVIEW: the session is renewed, then the sign-in's `next` opens
-                    renewThen(SignInRoute.after(origin, if (isSite) uri.getQueryParameter("next") else null))
+                    // NEVER THE SITE'S OWN WEB SIGN-IN IN THE APP: the session is renewed, then the sign-in's `next` opens -
+                    // or, for a sign-up (`prompt=create`) or a re-authentication (`max_age`), the account service's own.
+                    val next = SignInRoute.after(origin, uri.getQueryParameter("next"))
+                    val asked = SignInRoute.Asked.of(uri.getQueryParameter("prompt"), uri.getQueryParameter("max_age"))
+                    if (asked == null) {
+                        renewThen(next)
+                    } else {
+                        afterSignIn = next
+                        startInAppSignIn(asked)
+                    }
                     true
                 }
                 LinkPolicy.Decision.OPEN_NATIVE -> {
@@ -1210,27 +1208,22 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
     // --- window.VougaDevNative ---------------------------------------------------------------------------------------
 
     /**
-     * THE ACCOUNT SERVICE'S MEMBERS, on its origin only: `completeSignIn({code, state})` ends the sign-in inside the app
-     * (the shell trades the code for the app's tokens), and `nativeSignIn({provider})` signs in with another company's
-     * own sign-in, which refuses a WebView - Google through Android's Credential Manager; Apple is not offered on Android.
+     * THE ACCOUNT SERVICE'S MEMBER, on its origin only: `nativeSignIn({provider: "google", nonce})` signs in with
+     * Google, which refuses a WebView, through Android's Credential Manager: an ID token for the account service's
+     * Google client, carrying the page's nonce. Apple is not offered on Android. Without
+     * [ShellConfig.googleServerClientId] the member is absent: the page's Google link then leads to the sign-in in a
+     * Custom Tab.
      */
-    private fun signInMethods(): Map<String, NativeBridge.Method> = linkedMapOf(
-        "completeSignIn" to NativeBridge.Method { args, answer ->
-            val code = args?.optString("code").orEmpty()
-            val state = args?.optString("state").orEmpty()
-            val request = signInRequest
-            if (request == null || code.isBlank() || state != request.state) return@Method answer(NativeBridge.refused("invalid_state"))
-            val back = session.config.redirectUri.toUri().buildUpon().appendQueryParameter("code", code).appendQueryParameter("state", state).build()
-            finishInAppSignIn(back, answer)
-        },
-        "nativeSignIn" to NativeBridge.Method { args, answer ->
-            // `nativeSignIn("google")` or `nativeSignIn({provider: "google"})`
-            when (args?.optString("provider")?.ifEmpty { null } ?: args?.optString("value")) {
-                "google" -> {
-                    val clientId = session.config.googleServerClientId ?: return@Method answer(NativeBridge.refused("unavailable"))
-                    lifecycleScope.launch {
+    private fun signInMethods(): Map<String, NativeBridge.Method> {
+        val clientId = session.config.googleServerClientId ?: return emptyMap()
+        return linkedMapOf(
+            "nativeSignIn" to NativeBridge.Method { args, answer ->
+                // `nativeSignIn("google")` or `nativeSignIn({provider: "google", nonce})`
+                when (args?.optString("provider")?.ifEmpty { null } ?: args?.optString("value")) {
+                    "google" -> lifecycleScope.launch {
+                        val nonce = args?.optString("nonce")?.ifEmpty { null }
                         answer(
-                            when (val signed = GoogleSignIn.signIn(this@ShellActivity, clientId)) {
+                            when (val signed = GoogleSignIn.signIn(this@ShellActivity, clientId, nonce)) {
                                 is GoogleSignIn.Result.Signed -> NativeBridge.ok().put("provider", "google").put("idToken", signed.idToken)
                                     .put("email", signed.email ?: JSONObject.NULL).put("name", signed.name ?: JSONObject.NULL)
                                 GoogleSignIn.Result.Cancelled -> NativeBridge.refused("cancelled")
@@ -1238,12 +1231,12 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
                             },
                         )
                     }
+                    // Sign in with Apple is native on iOS only.
+                    else -> answer(NativeBridge.refused("unavailable"))
                 }
-                // Sign in with Apple is native on iOS only.
-                else -> answer(NativeBridge.refused("unavailable"))
-            }
-        },
-    )
+            },
+        )
+    }
 
     /**
      * `openOutside({url, returnUrl})`, on the payment service's origin: an outside step that refuses WebViews, in an
