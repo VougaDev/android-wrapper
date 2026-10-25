@@ -12,6 +12,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
+      # A public repository: nothing in it names what runs behind the apps or a path on a developer's machine.
+      - run: python3 .github/scrub.py
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
