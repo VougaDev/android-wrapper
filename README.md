@@ -49,7 +49,8 @@ the phone. An app's own extensions add theirs. An extension the app does not hav
   it carries `prompt=create` (sign-up), `prompt=login|select_account` or `max_age`, starts the account service's with
   them, keeping `next`. Google signs in natively (`nativeSignIn({provider: "google", nonce})`, Credential Manager, an
   ID token for the account service's Google client `googleServerClientId`); passkeys through the WebView's WebAuthn.
-  Without `googleServerClientId`, Google's sign-in falls back to a Custom Tab.
+  Without `googleServerClientId`, Google's sign-in falls back to a Custom Tab. With `signInFirst = false`, a person
+  without an account uses the site's public pages and signs in from the site's own link (sign-out returns to the home).
 - **Payment stays in the WebView.** The company's checkout is a company domain; a bank's or operator's step met on
   the way stays inside while it works there. Only a step that refuses WebViews (`outsideHosts`, or the checkout's
   `openOutside({url, returnUrl})` on a `trustedOrigins` origin) goes to Chrome's Auth Tab and comes back by itself

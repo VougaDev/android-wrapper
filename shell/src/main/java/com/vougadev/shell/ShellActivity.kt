@@ -385,13 +385,18 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
         val page = (asked as? Ask.Page)?.url
         when {
             asked is Ask.SignIn -> askSignIn(asked.next)
-            !session.signedIn -> {
+            !session.signedIn && session.config.signInFirst -> {
                 forgetOnPhone()
                 afterSignIn = page
                 startInAppSignIn()
             }
             // NO NETWORK: what the person had, from the phone - never a renewal that cannot happen, never an error.
             !connectivity.online -> openOffline(page)
+            // Not signed in, the site's public pages ([ShellConfig.signInFirst] false); a web session left on the phone is not the app's.
+            !session.signedIn -> {
+                if (SessionCookies.isSignedIn(session.cookies.jar())) forgetOnPhone()
+                webView.loadUrl(page ?: home())
+            }
             !SessionCookies.isSignedIn(session.cookies.jar()) -> renewThen(page)
             page != null -> open(page)
             savedInstanceState == null || webView.restoreState(savedInstanceState) == null -> webView.loadUrl(home())
@@ -688,7 +693,7 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
             }
             Consent.setCookie(this@ShellActivity)
             afterSignIn = null
-            startInAppSignIn()
+            if (session.config.signInFirst) startInAppSignIn() else { hideSignIn(); webView.loadUrl(home()) }
         }
     }
 

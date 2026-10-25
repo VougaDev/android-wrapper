@@ -25,7 +25,10 @@ package com.vougadev.shell
  *   sign-out); null: the app receives no push;
  * - [consent]: the purposes the native consent dialog asks about; empty: no dialog, `consent()` answers `{}`;
  * - [offlineCacheBytes]: how much of the site's pages and files the phone keeps for offline;
- * - [scopes]: what the app asks the account service for.
+ * - [scopes]: what the app asks the account service for;
+ * - [signInFirst]: true, the app opens on the sign-in until the person is signed in (Jobs, Ship: nothing works
+ *   without an account); false, a person without an account uses the site's public pages and signs in from the
+ *   site's own "Sign in" (Care: finding care needs no account, Apple 5.1.1(v)); sign-out then returns to the home.
  */
 data class ShellConfig(
     val appSlug: String,
@@ -49,6 +52,7 @@ data class ShellConfig(
     val offlineCacheBytes: Long = com.vougadev.shell.offline.PageCache.DEFAULT_CAP_BYTES,
     val debug: Boolean = false,
     val scopes: String = DEFAULT_SCOPES,
+    val signInFirst: Boolean = true,
 ) {
     companion object {
         /** `permissions` carries the app's grants; no `resource`: the token is traded at the site for a session. */
