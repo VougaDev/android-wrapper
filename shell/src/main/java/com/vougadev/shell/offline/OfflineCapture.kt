@@ -8,17 +8,15 @@ import okhttp3.Request
 import java.io.IOException
 
 /**
- * After a page of the site has loaded with the network: its HTML and the same-origin files it used are copied into the
- * [PageCache], as the WebView's session. The page itself is read once more (a GET, as the WebView did); a file already
+ * After a page of the site has loaded with the network: its HTML - as [PageFetch] gave it to the WebView, never read
+ * again - and the same-origin files it used are copied into the [PageCache], as the WebView's session. A file already
  * kept is read again only after [FRESH_MS], and a versioned one (`?v=`, or a hashed static name) never.
  */
 class OfflineCapture(private val session: AppSession, private val cache: PageCache, private val appName: String) {
 
-    suspend fun capture(pageUrl: String, files: Collection<String>) = withContext(Dispatchers.IO) {
+    suspend fun capture(page: PageFetch.Page, files: Collection<String>) = withContext(Dispatchers.IO) {
         val jar = session.cookies.jar() ?: ""
-        fetch(pageUrl, jar, "text/html")?.let { (type, body) ->
-            if (type.startsWith("text/html")) cache.put(pageUrl, type, body, isPage = true, title = PageCache.nameOf(String(body), appName))
-        }
+        cache.put(page.url, page.contentType, page.body, isPage = true, title = PageCache.nameOf(String(page.body), appName))
         for (url in files) {
             val saved = cache.savedAt(url)
             if (saved != null && (immutable(url) || System.currentTimeMillis() - saved < FRESH_MS)) continue

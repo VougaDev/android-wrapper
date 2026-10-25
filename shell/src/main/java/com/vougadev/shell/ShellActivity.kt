@@ -65,6 +65,7 @@ import com.vougadev.shell.auth.SessionWatch
 import com.vougadev.shell.offline.Connectivity
 import com.vougadev.shell.offline.OfflineCapture
 import com.vougadev.shell.offline.PageCache
+import com.vougadev.shell.offline.PageFetch
 import com.vougadev.shell.push.PushRoute
 import com.vougadev.shell.net.AppHttp
 import com.vougadev.shell.net.SessionCookies
@@ -134,6 +135,7 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
 
     private lateinit var connectivity: Connectivity
     private val capture by lazy { OfflineCapture(session, shell.pages, getString(R.string.app_name)) }
+    private val pageFetch = PageFetch(AppHttp.client)
 
     /** The same-origin files the page on screen asked for (written on WebView threads). */
     private val pageFiles: MutableSet<String> = ConcurrentHashMap.newKeySet()
@@ -731,9 +733,10 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
         val siteSession = SessionCookies.isSignedIn(CookieManager.getInstance().getCookie(origin.baseUrl))
         // Loaded from the network: kept for offline, with the files it used - only as the person sees it (a page the
         // site sent while dropping the session is renewed below, never kept).
-        if (keptAt == null && !offline && failedUrl == null && (siteSession || !session.signedIn)) {
+        val page = pageFetch.take(url)
+        if (page != null && keptAt == null && !offline && failedUrl == null && (siteSession || !session.signedIn)) {
             val files = pageFiles.toList()
-            lifecycleScope.launch { capture.capture(url, files) }
+            lifecycleScope.launch { capture.capture(page, files) }
         }
         when {
             siteSession -> onSignedInPage()
@@ -959,8 +962,17 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
             shell.extensions.firstNotNullOfOrNull { it.interceptRequest(applicationContext, url) }?.let { return it }
             // NO NETWORK: the page or file as the phone kept it; with the network, the files a page uses are noted.
             if (offline) return fromPhone(request)
-            if (!request.isForMainFrame) pageFiles += url.toString()
-            return null
+            if (!request.isForMainFrame) {
+                pageFiles += url.toString()
+                return null
+            }
+            // EACH PAGE FETCHED ONCE: the WebView's answer and the copy kept for offline are the same read.
+            val answer = pageFetch.fetch(url.toString(), request.requestHeaders, CookieManager.getInstance().getCookie(url.toString()), session.userAgent, session.acceptLanguage())
+                ?: return null
+            val cookies = CookieManager.getInstance()
+            answer.setCookies.forEach { cookies.setCookie(url.toString(), it) }
+            if (answer.code >= 400) httpStatus[PageCache.keyOf(url.toString())] = answer.code
+            return WebResourceResponse(answer.mimeType, answer.charset, answer.code, answer.reason, answer.headers, ByteArrayInputStream(answer.body))
         }
 
         override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
