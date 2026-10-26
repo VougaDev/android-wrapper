@@ -48,6 +48,7 @@ import androidx.core.net.toUri
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.isVisible
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import androidx.browser.customtabs.CustomTabColorSchemeParams
@@ -64,6 +65,7 @@ import com.vougadev.shell.auth.GoogleSignIn
 import com.vougadev.shell.auth.SessionWatch
 import com.vougadev.shell.offline.Connectivity
 import com.vougadev.shell.offline.OfflineCapture
+import com.vougadev.shell.offline.Outage
 import com.vougadev.shell.offline.PageCache
 import com.vougadev.shell.offline.PageFetch
 import com.vougadev.shell.push.PushRoute
@@ -80,7 +82,10 @@ import com.vougadev.shell.web.SignInRoute
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.vougadev.shell.push.Push
 import com.vougadev.shell.push.PushNotifications
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.delay
 import org.json.JSONObject
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -156,6 +161,14 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
         set(value) {
             forcedOfflineAt = if (value) SystemClock.elapsedRealtime() else 0L
         }
+
+    /**
+     * The site's edge answered instead of the site (a release restarts it) on a working network: pages come from the
+     * phone, the person reads that the service is restarting - never "offline" - and [watchRestart] tries again.
+     */
+    @Volatile
+    private var restarting = false
+    private var restartWatch: Job? = null
 
     /** The outside step in Chrome's Auth Tab (or a Custom Tab), and the page's answer waiting for its return. */
     private var outsideAnswer: ((JSONObject) -> Unit)? = null
@@ -729,6 +742,7 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
     }
 
     private fun retry() {
+        restarting = false
         errorView.visibility = View.GONE
         val url = failedUrl ?: (origin.baseUrl + "/")
         failedUrl = null
@@ -738,6 +752,7 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
     /** A page of the site, as the site served it (or the phone kept it): kept for offline, and the session watched. */
     private fun siteFinished(url: String, keptAt: Long?) {
         if (failedUrl == null) firstPageOfStart = false
+        if (keptAt == null) restarting = false // the site answered with its own page
         val siteSession = SessionCookies.isSignedIn(CookieManager.getInstance().getCookie(origin.baseUrl))
         // Loaded from the network: kept for offline, with the files it used - only as the person sees it (a page the
         // site sent while dropping the session is renewed below, never kept).
@@ -750,7 +765,7 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
             siteSession -> onSignedInPage()
             // The site dropped the session (its access token expired) while this phone is signed in: renewed
             // silently, then this page again - never an anonymous page for a signed-in person ([SessionWatch]).
-            sessionWatch.shouldRenew(session.signedIn, false, signInScreen != null || signingOut || offline, SystemClock.elapsedRealtime()) -> {
+            sessionWatch.shouldRenew(session.signedIn, false, signInScreen != null || signingOut || offline || restarting, SystemClock.elapsedRealtime()) -> {
                 Log.i(TAG, "The site dropped the session: renewed, then the page again")
                 renewThen(url)
             }
@@ -759,12 +774,18 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
 
     /**
      * NEVER A RAW ERROR PAGE: an answer that is not the site's own (a 502, 503 or 504 from the edge, a CDN's or a
-     * proxy's page, a page of the app's or a trusted origin without the company-page meta [PAGE_META]). Treated as offline: the copy kept on the phone - or, as the
-     * app starts, the last one kept - with the native bar; else the native screen with what is available.
+     * proxy's page, a page of the app's or a trusted origin without the company-page meta [PAGE_META]). The edge answered,
+     * so the network works: the service is restarting ([Outage]), retried by itself. The copy kept on the phone - or, as
+     * the app starts, the last one kept - with the native bar; else the native screen with what is available.
      */
     private fun foreignPage(url: String, status: Int?) {
-        val serverDown = status == null || status >= 500
-        if (serverDown) forcedOffline = true
+        val outage = Outage.of(connectivity.online, status)
+        val serverDown = outage != Outage.UNAVAILABLE
+        if (outage == Outage.OFFLINE) forcedOffline = true
+        if (outage == Outage.RESTARTING) {
+            restarting = true
+            watchRestart(url)
+        }
         val kept = when {
             !serverDown -> null
             shell.pages.savedAt(url) != null -> url
@@ -778,6 +799,33 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
         }
         failedUrl = url
         showUnavailable(url)
+    }
+
+    /** Every [RESTART_RETRY_MS] while the app is in front, [url] is asked of the site: once it answers, the page. */
+    private fun watchRestart(url: String) {
+        if (restartWatch?.isActive == true) return
+        restartWatch = lifecycleScope.launch {
+            while (restarting) {
+                delay(RESTART_RETRY_MS)
+                if (!lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED) || offline) continue
+                val back = withContext(Dispatchers.IO) {
+                    try {
+                        // null: a redirect or a non-HTML answer, the site's own
+                        pageFetch.fetch(url, emptyMap(), CookieManager.getInstance().getCookie(url), session.userAgent, session.acceptLanguage())
+                            ?.let { Outage.back(it.code, String(it.body), PAGE_META) } ?: true
+                    } catch (_: java.io.IOException) {
+                        false
+                    }
+                }
+                if (back && restarting && webViewAlive) {
+                    restarting = false
+                    when {
+                        errorView.isVisible && signInScreen == null -> retry()
+                        offlineBar.isVisible -> webView.reload()
+                    }
+                }
+            }
+        }
     }
 
     // --- Offline ------------------------------------------------------------------------------------------------------
@@ -795,6 +843,7 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
         if (origin.matches(webView.url)) tellNetwork()
         if (!online) return
         forcedOffline = false
+        restarting = false
         when {
             errorView.isVisible && signInScreen == null -> retry()
             offlineBar.isVisible -> webView.reload()
@@ -836,7 +885,11 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
         val key = PageCache.keyOf(url)
         val pages = shell.pages.pages().filter { it.url != key }.take(MAX_OFFLINE_ROWS)
         val entries = shell.extensions.flatMap { it.offlineEntries(this) }
-        if (!offline) {
+        if (!offline && restarting) {
+            errorTitle.setText(R.string.shell_restarting_title)
+            errorText.text = if (pages.isEmpty() && entries.isEmpty()) getString(R.string.shell_restarting_text)
+            else getString(R.string.shell_restarting_text) + "\n" + getString(R.string.shell_load_error_list)
+        } else if (!offline) {
             errorTitle.setText(R.string.shell_load_error_title)
             errorText.text = if (pages.isEmpty() && entries.isEmpty()) getString(R.string.shell_load_error_text)
             else getString(R.string.shell_load_error_text) + "\n" + getString(R.string.shell_load_error_list)
@@ -974,7 +1027,7 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
             if (!isSite || !request.method.equals("GET", ignoreCase = true)) return null
             shell.extensions.firstNotNullOfOrNull { it.interceptRequest(applicationContext, url) }?.let { return it }
             // NO NETWORK: the page or file as the phone kept it; with the network, the files a page uses are noted.
-            if (offline) return fromPhone(request)
+            if (offline || restarting) return fromPhone(request)
             if (!request.isForMainFrame) {
                 pageFiles += url.toString()
                 return null
@@ -1014,7 +1067,7 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
             val key = PageCache.keyOf(url)
             val keptAt = servedFromPhone[key]
             if (keptAt != null) {
-                offlineBar.text = getString(R.string.shell_offline_bar, time(keptAt))
+                offlineBar.text = getString(if (!offline && restarting) R.string.shell_restarting_bar else R.string.shell_offline_bar, time(keptAt))
                 offlineBar.visibility = View.VISIBLE
             } else {
                 offlineBar.visibility = View.GONE
@@ -1394,6 +1447,7 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
         private const val MAX_OFFLINE_ROWS = 8
         private const val KEY_SIGN_IN_REQUEST = "shell_sign_in_request"
         private const val FORCED_OFFLINE_MS = 30_000L
+        private const val RESTART_RETRY_MS = 5_000L
 
         /** Every company page carries `<meta name="vougadev-page" content="<service>">`; an answer without it is not one. */
         const val PAGE_META = "vougadev-page"

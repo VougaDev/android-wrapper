@@ -41,4 +41,7 @@
     <string name="shell_offline_nothing">Pas encore enregistré sur ce téléphone. Ce que vous consultez avec une connexion reste disponible ici.</string>
     <string name="shell_offline_saved_at">Mise à jour à %1$s</string>
     <string name="shell_load_error_list">Disponible sur ce téléphone :</string>
+    <string name="shell_restarting_bar">Le service redémarre · mis à jour à %1$s</string>
+    <string name="shell_restarting_title">Le service redémarre</string>
+    <string name="shell_restarting_text">Votre connexion fonctionne. Cet écran s\'ouvre de lui-même dès que le service répond à nouveau.</string>
 </resources>

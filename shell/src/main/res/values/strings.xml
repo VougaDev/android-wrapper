@@ -43,4 +43,7 @@
     <string name="shell_offline_nothing">Not saved on this phone yet. What you open with a connection stays available here.</string>
     <string name="shell_offline_saved_at">Updated at %1$s</string>
     <string name="shell_load_error_list">Available on this phone:</string>
+    <string name="shell_restarting_bar">Service restarting · updated at %1$s</string>
+    <string name="shell_restarting_title">The service is restarting</string>
+    <string name="shell_restarting_text">Your connection works. This screen opens by itself as soon as the service answers again.</string>
 </resources>

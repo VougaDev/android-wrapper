@@ -41,4 +41,7 @@
     <string name="shell_offline_nothing">Aún no guardado en este teléfono. Lo que abra con conexión seguirá disponible aquí.</string>
     <string name="shell_offline_saved_at">Actualizado a las %1$s</string>
     <string name="shell_load_error_list">Disponible en este teléfono:</string>
+    <string name="shell_restarting_bar">El servicio se está reiniciando · actualizado a las %1$s</string>
+    <string name="shell_restarting_title">El servicio se está reiniciando</string>
+    <string name="shell_restarting_text">Su conexión funciona. Esta pantalla se abre sola en cuanto el servicio vuelva a responder.</string>
 </resources>

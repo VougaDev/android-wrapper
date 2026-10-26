@@ -57,7 +57,9 @@ the phone. An app's own extensions add theirs. An extension the app does not hav
   under `outsideReturnPrefix`, loading in the WebView.
 - **Never a raw error page.** Every company page carries `<meta name="vougadev-page" content="<service>">` in its head.
   An answer that is not one (a 502, 503 or 504 from the edge, a page of the app's or a `trustedOrigins` origin without
-  that meta) is treated as offline: the copy kept on the phone, or the native screen.
+  that meta) is never shown. Offline only when the phone has no validated network; else the edge answered, so the
+  service is restarting (a release): the copy kept on the phone under "Service restarting", or the native screen saying
+  so, and the shell asks the site again every 5 s and loads the page as soon as it answers.
 - **An app's words**: no page, site, web, browser, link, URL, reload or tab in any native text (en, fr, es).
 
 - **Notifications.** Asked right after sign-in, once, with the app's own sentence (`shell_notifications_reason`), then
