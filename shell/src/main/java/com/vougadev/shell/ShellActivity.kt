@@ -609,7 +609,7 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
         }
     }
 
-    /** The site's session is in the jar: the page asked for (or home); after a new sign-in, the push token and its ask. */
+    /** The site's session is in the jar: the page asked for (or home); after a new sign-in, the push token. */
     private fun sessionOpen(newSignIn: Boolean) {
         hideSignIn()
         val target = afterSignIn ?: home()
@@ -618,14 +618,13 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
             // another person may have used the phone before: no way back to their pages
             webView.clearHistory()
             Push.afterSignIn(this)
-            askNotificationsOnce()
         }
         if (webViewAlive) open(target)
     }
 
     /**
-     * NOTIFICATIONS ARE ASKED RIGHT AFTER SIGN-IN, ONCE: the app's own sentence (what it sends and why), then the
-     * system's dialog (Android 13+). A refusal blocks nothing; Settings is where they are turned on later.
+     * NOTIFICATIONS ARE ASKED RIGHT AFTER SIGN-IN (its first signed-in page), ONCE: the app's own sentence (what it
+     * sends and why), then the system's dialog (Android 13+). A refusal blocks nothing; Settings turns them on later.
      */
     private fun askNotificationsOnce() {
         if (!Push.enabled(this) || Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
@@ -659,9 +658,10 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
         lifecycleScope.launch { withContext(NonCancellable) { shell.forget() } }
     }
 
-    /** A signed-in page: the push token once per start, and each extension's follow-up. */
+    /** A signed-in page: the push token once per start, notifications asked once, and each extension's follow-up. */
     private fun onSignedInPage() {
         Push.startOncePerProcess(this)
+        askNotificationsOnce() // right after a sign-in, or on the first signed-in page after the update that brought push
         attachments.forEach { it.onSignedInPage() }
     }
 
