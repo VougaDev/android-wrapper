@@ -6,11 +6,18 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
+    <!-- The page above the offline bar, never under it: the bar would hide the site's bottom tabs. -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+
     <!-- Pull-to-refresh over the page; web/PullGuard.kt decides whether the page itself is at its top. -->
     <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
         android:id="@+id/pull"
         android:layout_width="match_parent"
-        android:layout_height="match_parent">
+        android:layout_height="0dp"
+        android:layout_weight="1">
 
         <WebView
             android:id="@+id/web"
@@ -23,7 +30,6 @@
         android:id="@+id/offline_bar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_gravity="bottom"
         android:background="@color/shell_offline_bar"
         android:gravity="center"
         android:minHeight="32dp"
@@ -32,6 +38,7 @@
         android:textAppearance="?attr/textAppearanceBody2"
         android:textColor="@color/shell_offline_bar_text"
         android:visibility="gone" />
+    </LinearLayout>
 
     <!--
       A page that cannot be shown: never visited, with no network (then what IS available offline is listed: the pages
