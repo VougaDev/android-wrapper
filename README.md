@@ -130,6 +130,21 @@ the phone. An app's own extensions add theirs. An extension the app does not hav
    user agent, calls `openSettings()` from "Privacy and data", and shows no install prompt and no cookie banner in the
    app.
 
+## Testing on a phone
+
+- **Close the app the way a person or the system does, never with `adb shell am force-stop`.** Press Home, then
+  `adb shell am kill <applicationId>` (what Android does to a background app, and what swiping it away does). On some
+  phones (the WP35, MediaTek, proved 2026-10-26) a force-stop while the WebView runs makes Android refuse that app's
+  renderer from then on: logcat says `Unable to launch app … SandboxedProcessService…: process is bad` and
+  `cr_ChildProcessConn: Failed to establish the service connection`, and the app shows a black screen, online or
+  offline, with any build, until the phone reboots. That black screen is the test's doing, not the shell's.
+- **Offline cold start:** after a signed-in visit, Home, `am kill`, then airplane mode with Wi-Fi and data off
+  (`adb shell cmd connectivity airplane-mode enable`, `svc wifi disable`, `svc data disable`), then launch: the pages
+  kept open under the offline bar. Put the network back as it was before handing a shared phone on.
+- **The WebView's own tools:** `adb forward tcp:9222 localabstract:webview_devtools_remote_<pid>` (debug builds), then
+  the DevTools protocol on `localhost:9222`.
+- adb lists no device while `lsusb` shows the phone: restart adb's server (`adb kill-server; adb start-server`).
+
 ## Rules every app built on it keeps
 
 - **At least one real native extension** that matters to its users' job, never a plain website loader (App Store
