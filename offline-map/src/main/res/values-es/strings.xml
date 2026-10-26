@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="offline_map_ready_title">Mapa sin conexión disponible</string>
+    <string name="offline_map_ready_body">El mapa de su zona ya se abre sin conexión.</string>
+    <string name="offline_map_title">Mapas sin conexión</string>
+    <string name="offline_map_none">Todavía ninguno en este teléfono (se descargan con Wi-Fi)</string>
+    <string name="offline_map_delete">Eliminar</string>
+    <string name="offline_map_delete_text">¿Eliminar los mapas sin conexión de este teléfono? Se volverán a descargar con Wi-Fi.</string>
+</resources>

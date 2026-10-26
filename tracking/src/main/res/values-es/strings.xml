@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tracking_channel_name">Ubicación compartida</string>
+    <string name="tracking_channel_description">Visible mientras se comparte su ubicación.</string>
+    <string name="tracking_default_title">Ubicación compartida</string>
+    <string name="tracking_default_text">Su ubicación se comparte mientras su tarea está en curso.</string>
+    <string name="account_channel_name">Cuenta</string>
+    <string name="account_channel_description">Le avisa cuando debe volver a iniciar sesión.</string>
+    <string name="tracking_sign_in_title">Vuelva a iniciar sesión para compartir su ubicación</string>
+    <string name="tracking_sign_in_text">Su ubicación ya no se comparte. Abra la aplicación e inicie sesión.</string>
+    <string name="tracking_disclosure_title">Ubicación compartida</string>
+    <string name="tracking_disclosure_text">Mientras su tarea está en curso, esta aplicación recoge su ubicación aproximadamente una vez por minuto, incluso cuando la aplicación está cerrada o no se usa. El uso compartido se detiene al terminar la tarea, al cerrar sesión y, como máximo, después de seis horas. Una notificación lo indica durante todo ese tiempo.</string>
+    <string name="tracking_disclosure_accept">Acepto</string>
+    <string name="tracking_disclosure_decline">Ahora no</string>
+</resources>
