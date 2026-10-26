@@ -56,8 +56,9 @@ the phone. An app's own extensions add theirs. An extension the app does not hav
   `openOutside({url, returnUrl})` on a `trustedOrigins` origin) goes to Chrome's Auth Tab and comes back by itself
   under `outsideReturnPrefix`, loading in the WebView.
 - **Never a raw error page.** Every company page carries `<meta name="vougadev-page" content="<service>">` in its head.
-  An answer that is not one (a 502, 503 or 504 from the edge, a page of the app's or a `trustedOrigins` origin without
-  that meta) is never shown. Offline only when the phone has no validated network; else the edge answered, so the
+  An answer of the app's or a `trustedOrigins` origin is the edge's only when it is a 5xx without that meta (a 502, 503
+  or 504 from the edge): never shown. A 2xx, 3xx or 4xx is the site's own answer - a CV, an invoice, a ticket, a PDF, a
+  printable sheet - shown as it is, meta or not. Offline only when the phone has no validated network; else the edge answered, so the
   service is restarting (a release): the copy kept on the phone under "Service restarting", or the native screen saying
   so, and the shell asks the site again every 5 s and loads the page as soon as it answers.
 - **An app's words**: no page, site, web, browser, link, URL, reload or tab in any native text (en, fr, es).

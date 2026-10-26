@@ -1,38 +1,31 @@
 package com.vougadev.shell.offline
 
-import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** Offline only without a validated network: an edge that answered is a service restarting, never "offline". */
+/** Only a 5xx without the company-page meta is the edge's: the site's own answers are never replaced. */
 class OutageTest {
 
     @Test
-    fun anEdgeErrorOnAWorkingNetworkIsARestartNeverOffline() {
-        listOf(502, 503, 504, 500).forEach { assertEquals(Outage.RESTARTING, Outage.of(validated = true, status = it)) }
-        // a 200 page without the company-page meta: the proxy's maintenance page
-        assertEquals(Outage.RESTARTING, Outage.of(validated = true, status = null))
+    fun theSitesOwnAnswersAreNeverReplacedMetaOrNot() {
+        // a CV, an invoice, a ticket, a PDF: generated documents without the meta (Jobs' CV, Echo on the WP35, 2026-10-26)
+        listOf(null, 201, 204, 301, 302, 400, 403, 404, 410, 429).forEach {
+            assertFalse("$it", Outage.isEdge(it, hasMeta = false))
+            assertFalse("$it", Outage.isEdge(it, hasMeta = true))
+        }
     }
 
     @Test
-    fun withoutAValidatedNetworkItIsOffline() {
-        listOf(null, 404, 502, 503, 504).forEach { assertEquals(Outage.OFFLINE, Outage.of(validated = false, status = it)) }
+    fun aServerErrorWithoutTheMetaIsTheEdges() {
+        listOf(500, 502, 503, 504, 522).forEach { assertTrue("$it", Outage.isEdge(it, hasMeta = false)) }
+        // the site's own error page carries the meta: shown
+        listOf(500, 503).forEach { assertFalse("$it", Outage.isEdge(it, hasMeta = true)) }
     }
 
     @Test
-    fun aForeignPageUnder500IsUnavailable() {
-        assertEquals(Outage.UNAVAILABLE, Outage.of(validated = true, status = 404))
-        assertEquals(Outage.UNAVAILABLE, Outage.of(validated = true, status = 403))
-    }
-
-    @Test
-    fun theSiteIsBackOnlyWithItsOwnPage() {
-        val site = """<head><meta name="vougadev-page" content="motor"><title>Motor</title>"""
-        assertTrue(Outage.back(200, site, "vougadev-page"))
-        assertTrue(Outage.back(404, site, "vougadev-page"))
-        assertFalse(Outage.back(502, site, "vougadev-page"))
-        assertFalse(Outage.back(503, "<h1>503 Service Unavailable</h1>", "vougadev-page"))
-        assertFalse(Outage.back(200, "<h1>Maintenance</h1>", "vougadev-page"))
+    fun theSiteIsBackWithAnyAnswerUnder500() {
+        listOf(200, 302, 404).forEach { assertTrue("$it", Outage.back(it)) }
+        listOf(500, 502, 503, 504).forEach { assertFalse("$it", Outage.back(it)) }
     }
 }

@@ -773,21 +773,19 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
     }
 
     /**
-     * NEVER A RAW ERROR PAGE: an answer that is not the site's own (a 502, 503 or 504 from the edge, a CDN's or a
-     * proxy's page, a page of the app's or a trusted origin without the company-page meta [PAGE_META]). The edge answered,
-     * so the network works: the service is restarting ([Outage]), retried by itself. The copy kept on the phone - or, as
-     * the app starts, the last one kept - with the native bar; else the native screen with what is available.
+     * NEVER A RAW ERROR PAGE: the edge's answer instead of the site's (a 5xx without the company-page meta [PAGE_META],
+     * [Outage.isEdge]). The edge answered, so with a validated network the service is restarting, retried by itself; else
+     * offline. The copy kept on the phone - or, as the app starts, the last one kept - with the native bar; else the
+     * native screen with what is available.
      */
-    private fun foreignPage(url: String, status: Int?) {
-        val outage = Outage.of(connectivity.online, status)
-        val serverDown = outage != Outage.UNAVAILABLE
-        if (outage == Outage.OFFLINE) forcedOffline = true
-        if (outage == Outage.RESTARTING) {
+    private fun foreignPage(url: String) {
+        if (connectivity.online) {
             restarting = true
             watchRestart(url)
+        } else {
+            forcedOffline = true
         }
         val kept = when {
-            !serverDown -> null
             shell.pages.savedAt(url) != null -> url
             firstPageOfStart -> shell.pages.pages().firstOrNull()?.url
             else -> null
@@ -812,7 +810,7 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
                     try {
                         // null: a redirect or a non-HTML answer, the site's own
                         pageFetch.fetch(url, emptyMap(), CookieManager.getInstance().getCookie(url), session.userAgent, session.acceptLanguage())
-                            ?.let { Outage.back(it.code, String(it.body), PAGE_META) } ?: true
+                            ?.let { Outage.back(it.code) } ?: true
                     } catch (_: java.io.IOException) {
                         false
                     }
@@ -1079,12 +1077,13 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
             val own = origin.matches(url)
             when {
                 keptAt != null -> if (own) siteFinished(url, keptAt)
-                // NEVER A RAW ERROR PAGE: a company page without the company-page meta is an edge's, a proxy's or a CDN's.
+                // NEVER A RAW ERROR PAGE: a 5xx without the company-page meta is an edge's, a proxy's or a CDN's; any
+                // other answer is the site's own (a CV, an invoice, a PDF), shown meta or not ([Outage.isEdge]).
                 own || trusted.any { it.matches(url) } -> view.evaluateJavascript(PAGE_META_CHECK) { found ->
-                    if (found == "false" && failedUrl == null) foreignPage(url, status) else if (own) siteFinished(url, null)
+                    if (failedUrl == null && Outage.isEdge(status, found != "false")) foreignPage(url) else if (own) siteFinished(url, null)
                 }
                 // Another company page (the account service's) the edge could not serve: never the raw error.
-                gateway && failedUrl == null -> foreignPage(url, status)
+                gateway && failedUrl == null -> foreignPage(url)
                 own -> siteFinished(url, null)
             }
         }

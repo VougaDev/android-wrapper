@@ -1,22 +1,15 @@
 package com.vougadev.shell.offline
 
 /**
- * What the person is told when a page of the site cannot be shown, and never a lie: OFFLINE only when the phone has no
- * validated network. An edge that ANSWERED (a 502, 503 or 504 from the proxy during a release, its page without the
- * company-page meta) proves the connection works: the service is RESTARTING, and the shell retries by itself.
+ * Which answers of a trusted origin are the edge's, never shown: a 5xx without the company-page meta (a 502, 503 or 504
+ * from the proxy during a release). A 2xx, 3xx or 4xx is the site's own answer - a page, a CV, an invoice, a ticket, a
+ * PDF, a printable sheet - shown as it is, meta or not, whatever its type. An edge that answered proves the connection
+ * works: the service is restarting, never "offline".
  */
-enum class Outage {
-    OFFLINE, RESTARTING, UNAVAILABLE;
+object Outage {
+    /** [status] null: a 2xx. Pure. */
+    fun isEdge(status: Int?, hasMeta: Boolean): Boolean = status != null && status >= 500 && !hasMeta
 
-    companion object {
-        /** The edge answered [status] (null: a 200 page without the company-page meta). Pure. */
-        fun of(validated: Boolean, status: Int?): Outage = when {
-            !validated -> OFFLINE
-            status == null || status >= 500 -> RESTARTING
-            else -> UNAVAILABLE
-        }
-
-        /** Whether the site is back: a page under 500 that is the site's own ([meta] in it), never the edge's. Pure. */
-        fun back(status: Int, html: String, meta: String): Boolean = status < 500 && "name=\"$meta\"" in html
-    }
+    /** Whether the site is back, asked again during a restart: any answer under 500 is its own. Pure. */
+    fun back(status: Int): Boolean = status < 500
 }
