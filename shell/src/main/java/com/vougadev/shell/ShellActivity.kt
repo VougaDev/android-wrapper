@@ -1055,6 +1055,12 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
             val key = url?.let(PageCache::keyOf)
             servedFromPhone.keys.retainAll { it == key }
             if (failedUrl == null) errorView.visibility = View.GONE
+            // The phone's password manager only on the account service's sign-in: on the app's own pages it offers saved
+            // logins under any lone text field (a job title, a search), whatever the field's autocomplete says.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                view.importantForAutofill = if (auth.matches(url)) View.IMPORTANT_FOR_AUTOFILL_AUTO
+                else View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
+            }
         }
 
         override fun onPageFinished(view: WebView, url: String?) {

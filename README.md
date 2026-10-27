@@ -51,6 +51,8 @@ the phone. An app's own extensions add theirs. An extension the app does not hav
   ID token for the account service's Google client `googleServerClientId`); passkeys through the WebView's WebAuthn.
   Without `googleServerClientId`, Google's sign-in falls back to a Custom Tab. With `signInFirst = false`, a person
   without an account uses the site's public pages and signs in from the site's own link (sign-out returns to the home).
+  The phone's password manager (autofill) works on the account service's pages only: on the app's own pages it offered
+  saved logins under any lone text field, whatever its `autocomplete` (address and phone autofill are off there too).
 - **Payment stays in the WebView.** The company's checkout is a company domain; a bank's or operator's step met on
   the way stays inside while it works there. Only a step that refuses WebViews (`outsideHosts`, or the checkout's
   `openOutside({url, returnUrl})` on a `trustedOrigins` origin) goes to Chrome's Auth Tab and comes back by itself
