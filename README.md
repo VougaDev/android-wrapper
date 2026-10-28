@@ -28,6 +28,25 @@ The same on Android and iOS; a page branches on the platform only through `platf
 `stopTracking()`, `trackingState()`. **`offline-map`** adds no member: the page's own tile requests are answered from
 the phone. An app's own extensions add theirs. An extension the app does not have adds no member and no name.
 
+**The `offline-map` extension**, `OfflineMapExtension(OfflineMapConfig(manifestPath, tilePath, tileOrigins))`:
+
+- `manifestPath` (signed-in): `{available, tilesets: [{source, name, size, version, url, token?}]}`. `url` is a
+  same-origin path (downloaded as the WebView's session) or an https URL on one of `tileOrigins` (downloaded with
+  `Authorization: Bearer <token>` and none of the site's cookies; the token serves that download only and is never
+  kept). `version` is the file's ETag: a new one downloads again; a cut-off download resumes (`Range`, `If-Range`).
+  `name` may end in `.mbtiles`. On Wi-Fi only, once per app start; `size` must match.
+- `tilePath`, e.g. `/tiles/{source}/{z}/{x}/{y}`: a tile request of the app's pages, on the site or on a
+  `tileOrigins` origin (exact `https://host`, e.g. `https://maps.vougadev.com`), is answered from its region's file
+  whenever the region is on the phone, online too (no data spent). A tile not in the file goes to the network.
+- Everything else the pages take from a `tileOrigins` origin (the style, `/tiles/font/…` glyphs, the sprite) is fetched
+  with the page's own headers (its bearer), never a cookie, and kept while a region is on the phone; with no network
+  the kept copy answers, so the map draws offline. A style, glyph range or sprite seen once online is there offline.
+- Answers for a `tileOrigins` origin carry `Access-Control-Allow-Origin: <the site's origin>`, and its CORS preflight
+  (`OPTIONS`, the bearer makes one) is answered on the phone. The site still drops `Authorization` from its map
+  requests while offline (`navigator.onLine` false, in MapLibre's synchronous `transformRequest`): a preflight the WebView
+  sends straight to the network fails offline. iOS (no request interception in WebKit) rewrites them to
+  `vougadev-tiles:`, so the site's `connect-src` allows `vougadev-tiles:` there.
+
 - A page tests for a feature: `window.VougaDevNative && VougaDevNative.features().includes("tracking")`.
 - Injected into the app's own origin with every member; into the account service's with `nativeSignIn` only
   (when the app has the account service's Google client); into each `trustedOrigins` origin (frames included) with `platform`, `version`, `features` and

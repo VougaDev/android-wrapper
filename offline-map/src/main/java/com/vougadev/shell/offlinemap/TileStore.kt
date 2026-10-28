@@ -17,7 +17,7 @@ data class TileRequest(val source: String, val z: Int, val x: Int, val y: Int) {
 /** The site's tile address ([OfflineMapConfig.tilePath]) as a pattern. Pure, tested on the JVM. */
 class TilePath private constructor(private val pattern: Regex, private val order: List<String>) {
 
-    /** The tile a same-origin [path] names, or null when it is not a tile of a valid zoom and position. */
+    /** The tile a [path] (same-origin, or on a tile origin) names, or null when it is not a tile of a valid zoom and position. */
     fun match(path: String?): TileRequest? {
         val found = pattern.matchEntire(path ?: return null) ?: return null
         val parts = order.zip(found.groupValues.drop(1)).toMap()
@@ -56,7 +56,8 @@ object TileStore {
 
     private val open = ConcurrentHashMap<String, SQLiteDatabase>()
 
-    fun answer(file: File, tile: TileRequest): WebResourceResponse? {
+    /** [headers] go with the answer (a tile origin's CORS headers). */
+    fun answer(file: File, tile: TileRequest, headers: Map<String, String> = emptyMap()): WebResourceResponse? {
         val db = database(file) ?: return null
         val bytes = try {
             db.rawQuery(
@@ -67,7 +68,7 @@ object TileStore {
             null
         } ?: return null
         val body = if (isGzip(bytes)) GZIPInputStream(ByteArrayInputStream(bytes)).use { it.readBytes() } else bytes
-        return WebResourceResponse(mimeOf(db), null, 200, "OK", mapOf("Cache-Control" to "no-cache"), ByteArrayInputStream(body))
+        return WebResourceResponse(mimeOf(db), null, 200, "OK", headers + ("Cache-Control" to "no-cache"), ByteArrayInputStream(body))
     }
 
     /** A region replaced or deleted: its file is opened again next time. */

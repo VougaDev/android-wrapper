@@ -169,6 +169,10 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
      */
     @Volatile
     private var restarting = false
+
+    /** The page shown is the app's own: its requests to another origin may be answered by an extension. */
+    @Volatile
+    private var pageOnSite = false
     private var restartWatch: Job? = null
 
     /** The outside step in Chrome's Auth Tab (or a Custom Tab), and the page's answer waiting for its return. */
@@ -1018,7 +1022,8 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
         /**
          * The web's sign-out form (a top-level POST to `/auth/logout/`) never reaches the site from the WebView: the app
          * signs out itself, in its own order ([signOut]). A same-origin GET an extension can answer from the phone (an
-         * offline map tile) is answered there. Called on a WebView thread.
+         * offline map tile) is answered there, and so is a request of the app's own pages to another origin
+         * ([Extension.interceptCrossOrigin]: a shared map server's tile). Called on a WebView thread.
          */
         override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
             val url = request.url
@@ -1027,7 +1032,11 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
                 runOnUiThread { signOut() }
                 return WebResourceResponse("text/html", "utf-8", ByteArrayInputStream(ByteArray(0)))
             }
-            if (!isSite || !request.method.equals("GET", ignoreCase = true)) return null
+            if (!isSite) {
+                if (!pageOnSite || !fromSite(request.requestHeaders)) return null
+                return shell.extensions.firstNotNullOfOrNull { it.interceptCrossOrigin(applicationContext, request) }
+            }
+            if (!request.method.equals("GET", ignoreCase = true)) return null
             shell.extensions.firstNotNullOfOrNull { it.interceptRequest(applicationContext, url) }?.let { return it }
             // NO NETWORK: the page or file as the phone kept it; with the network, the files a page uses are noted.
             if (offline || restarting) return fromPhone(request)
@@ -1054,7 +1063,14 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
             return WebResourceResponse(answer.mimeType, answer.charset, answer.code, answer.reason, answer.headers, ByteArrayInputStream(answer.body))
         }
 
+        /** A request names the page that sent it when it can: never another origin's. */
+        private fun fromSite(headers: Map<String, String>): Boolean {
+            val sender = headers.entries.firstOrNull { it.key.equals("Origin", ignoreCase = true) }?.value ?: return true
+            return sender == origin.originString
+        }
+
         override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
+            pageOnSite = origin.matches(url)
             pageFiles.clear()
             // Only the page now starting may still say it came from the phone (a page reports "finished" more than once).
             val key = url?.let(PageCache::keyOf)

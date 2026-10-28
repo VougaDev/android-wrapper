@@ -23,26 +23,33 @@ import java.util.concurrent.TimeUnit
  *
  * ```
  * {"available": true, "tilesets": [{"source": "<style source>", "name": "<file name>", "size": <bytes>,
- *   "version": "<changes when the file does>", "url": "<same-origin path of the file>"}]}
+ *   "version": "<changes when the file does: its ETag>", "url": "<same-origin path, or https URL on a tileOrigin>",
+ *   "token": "<optional bearer for that download only>"}]}
  * ```
  *
  * - WI-FI ONLY ([canDownload]): tens of megabytes on prepaid data is money, not a convenience.
  * - The style is kept on disk per theme ([saveStyle]) so a native map opens with no network at all, and each downloaded
  *   tileset replaces its online source with `mbtiles://` ([localStyle]).
- * - The version is the server file's own: a tileset replaced on the server downloads again.
+ * - The version is the server file's own (its ETag): a tileset replaced on the server downloads again; a download cut
+ *   off resumes where it stopped (`Range`, `If-Range` on that ETag).
+ * - A file on a [OfflineMapConfig.tileOrigins] server goes there with the manifest's `token` as `Authorization: Bearer`
+ *   and none of the site's cookies; the token is used for that download only, never kept.
  */
 object OfflineMap {
-    data class Tileset(val source: String, val name: String, val size: Long, val version: String, val url: String)
+    /** [url] is a same-origin path, or an https URL on one of the tile origins; [token] is never kept. */
+    data class Tileset(val source: String, val name: String, val size: Long, val version: String, val url: String, val token: String? = null)
 
-    fun parse(body: JSONObject?): List<Tileset> {
+    fun parse(body: JSONObject?, config: OfflineMapConfig): List<Tileset> {
         if (body == null || body.has("available") && !body.optBoolean("available")) return emptyList()
         val rows = body.optJSONArray("tilesets") ?: return emptyList()
         return (0 until rows.length()).mapNotNull { i ->
             val row = rows.optJSONObject(i) ?: return@mapNotNull null
-            val name = row.optString("name")
+            val name = row.optString("name").removeSuffix(".mbtiles")
             val url = row.optString("url")
-            if (!NAME.matches(name) || !url.startsWith("/") || url.startsWith("//")) return@mapNotNull null
-            Tileset(row.optString("source").ifBlank { name }, name, row.optLong("size"), row.optString("version"), url)
+            val sameOrigin = url.startsWith("/") && !url.startsWith("//")
+            if (!NAME.matches(name) || !sameOrigin && config.tileOriginOf(url) == null) return@mapNotNull null
+            val token = row.optString("token").takeIf { !sameOrigin && it.isNotBlank() && TOKEN.matches(it) }
+            Tileset(row.optString("source").ifBlank { name }, name, row.optLong("size"), row.optString("version"), url, token)
         }
     }
 
@@ -86,7 +93,15 @@ object OfflineMap {
     fun deleteAll(context: Context) {
         TileStore.forget()
         dir(context).listFiles()?.filter { it.name.endsWith(".mbtiles") || it.name.endsWith(".part") }?.forEach { it.delete() }
+        KeptAnswers.dir(context).deleteRecursively()
         prefs(context).edit { clear() }
+    }
+
+    /** A network the system validated: worth asking the map server before the kept copy. */
+    fun online(context: Context): Boolean {
+        val manager = context.getSystemService(ConnectivityManager::class.java) ?: return false
+        val caps = manager.getNetworkCapabilities(manager.activeNetwork) ?: return false
+        return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
     }
 
     fun canDownload(context: Context): Boolean {
@@ -96,38 +111,62 @@ object OfflineMap {
     }
 
     /**
-     * Downloads each listed tileset whose version the phone does not hold, as the WebView's session. Answers how many
-     * files arrived; a failure leaves the previous file in place and is tried again next time.
+     * Downloads each listed tileset whose version the phone does not hold: a same-origin one as the WebView's session
+     * ([cookies]), one on a tile origin with its token only. Answers how many files arrived; a failure keeps what came
+     * (resumed next time) and leaves the previous file in place.
      */
-    suspend fun sync(context: Context, origin: AppOrigin, cookies: String, userAgent: String, language: String, tilesets: List<Tileset>): Int =
+    suspend fun sync(context: Context, origin: AppOrigin, cookies: String?, userAgent: String, language: String, tilesets: List<Tileset>): Int =
         withContext(Dispatchers.IO) {
-            val headers = AppHttp.headers(origin, cookies, userAgent, language, unsafe = false) ?: return@withContext 0
             val prefs = prefs(context)
             var arrived = 0
             for (tileset in tilesets) {
                 val file = File(dir(context), "${tileset.name}.mbtiles")
                 if (file.isFile && prefs.getString("version:${tileset.name}", null) == tileset.version) continue
+                val request = downloadRequest(origin, cookies, userAgent, language, tileset) ?: continue
                 val part = File(dir(context), "${tileset.name}.mbtiles.part")
-                val request = Request.Builder().url(origin.baseUrl + tileset.url).headers(headers)
-                    .header("Accept", "application/octet-stream").get().build()
+                if (part.length() >= tileset.size) part.delete() // too long, or complete yet never kept: start again
                 val ok = try {
-                    download.newCall(request).execute().use { response ->
-                        if (!response.isSuccessful) return@use false
-                        part.outputStream().use { out -> response.body.byteStream().copyTo(out, 64 * 1024) }
-                        part.length() == tileset.size
-                    }
+                    fetchInto(part, tileset, request)
                 } catch (_: IOException) {
                     false
                 }
                 if (ok && part.renameTo(file)) {
                     prefs.edit { putString("version:${tileset.name}", tileset.version).putString("source:${tileset.source}", tileset.name) }
                     arrived++
-                } else {
+                } else if (part.length() >= tileset.size) {
                     part.delete()
                 }
             }
             arrived
         }
+
+    private fun downloadRequest(origin: AppOrigin, cookies: String?, userAgent: String, language: String, tileset: Tileset): Request.Builder? {
+        val builder = if (tileset.url.startsWith("/")) {
+            val headers = cookies?.takeIf { it.isNotBlank() }?.let { AppHttp.headers(origin, it, userAgent, language, unsafe = false) } ?: return null
+            Request.Builder().url(origin.baseUrl + tileset.url).headers(headers)
+        } else {
+            // THE SHARED MAP SERVER: its bearer only, never the site's cookies.
+            Request.Builder().url(tileset.url).header("User-Agent", userAgent).header("Accept-Language", language)
+                .apply { tileset.token?.let { header("Authorization", "Bearer $it") } }
+        }
+        return builder.header("Accept", "application/octet-stream").get()
+    }
+
+    /** Into [part], from where an earlier attempt stopped when the server still holds that version. */
+    private fun fetchInto(part: File, tileset: Tileset, request: Request.Builder): Boolean {
+        val from = part.length()
+        if (from > 0) request.header("Range", "bytes=$from-").header("If-Range", "\"${tileset.version}\"")
+        download.newCall(request.build()).execute().use { response ->
+            val append = response.code == 206 && resumesAt(response.header("Content-Range"), from)
+            if (response.code != 200 && !append) return false
+            java.io.FileOutputStream(part, append).use { out -> response.body.byteStream().copyTo(out, 64 * 1024) }
+        }
+        return part.length() == tileset.size
+    }
+
+    /** `bytes 1000-46137343/46137344` continues a file of [from] bytes. Pure. */
+    fun resumesAt(contentRange: String?, from: Long): Boolean =
+        contentRange?.removePrefix("bytes ")?.substringBefore('-')?.trim()?.toLongOrNull() == from
 
     //: A LARGE FILE: no call timeout, a read timeout per chunk (a stalled link is abandoned).
     private val download: OkHttpClient by lazy {
@@ -135,6 +174,7 @@ object OfflineMap {
     }
 
     private val NAME = Regex("^[A-Za-z0-9_-]+$")
+    private val TOKEN = Regex("^[A-Za-z0-9._~+/=-]+$")
     /** `<storeName>_offline_map`: the regions on the phone and their versions. */
     private fun prefs(context: Context) = context.getSharedPreferences(prefsName(Shell.of(context).config.storeName), Context.MODE_PRIVATE)
 

@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import androidx.appcompat.app.AppCompatActivity
 import com.vougadev.shell.net.AppCaller
@@ -36,6 +37,12 @@ interface Extension {
      * network. Only same-origin GET requests reach it.
      */
     fun interceptRequest(context: Context, url: Uri): WebResourceResponse? = null
+
+    /**
+     * A request the app's own pages make to another origin (any method, a CORS preflight included), on a WebView thread:
+     * an answer from the phone carrying its own CORS headers (a shared map server's tile), or null for the network.
+     */
+    fun interceptCrossOrigin(context: Context, request: WebResourceRequest): WebResourceResponse? = null
 
     /** Sign-out, while the site's session is still open; [caller] never renews it. */
     suspend fun beforeSessionEnds(context: Context, caller: AppCaller) = Unit
