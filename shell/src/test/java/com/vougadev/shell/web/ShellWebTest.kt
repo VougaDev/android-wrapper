@@ -80,6 +80,16 @@ class ShellWebTest {
     }
 
     @Test
+    fun nativeScreensFollowTheSitesLightOrDark() {
+        assertEquals(androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES, PageTheme.nightMode("\"dark\""))
+        assertEquals(androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_NO, PageTheme.nightMode("\"light\""))
+        assertEquals(androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM, PageTheme.nightMode("null"))
+        assertEquals(androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM, PageTheme.nightMode(null))
+        // back closes a menu or a popover before it leaves the screen
+        assertTrue(ModalBack.SCRIPT.contains(".dropdown-menu.show") && ModalBack.SCRIPT.contains(".popover.show"))
+    }
+
+    @Test
     fun telegramsBotLinksOpenTelegramNeverTheWebView() {
         // the account service's "Connect Telegram" answers with a redirect to the bot: tapped or not, the app
         assertEquals(LinkPolicy.Decision.OPEN_IN_ITS_APP, decide("https", "t.me", tapped = false))

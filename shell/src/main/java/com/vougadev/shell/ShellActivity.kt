@@ -77,6 +77,7 @@ import com.vougadev.shell.web.MediaGrant
 import com.vougadev.shell.web.ModalBack
 import com.vougadev.shell.web.NativeBridge
 import com.vougadev.shell.web.NativeShim
+import com.vougadev.shell.web.PageTheme
 import com.vougadev.shell.web.PullGuard
 import com.vougadev.shell.web.SignInRoute
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -664,7 +665,11 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
         permissionsLauncher.launch(permissions)
     }
 
-    private fun openSettings() = settingsLauncher.launch(Intent(this, SettingsActivity::class.java))
+    /** Settings in the site's light or dark, read from the page at the moment it opens (its select changes no page). */
+    private fun openSettings() = webView.evaluateJavascript(PageTheme.SCRIPT) { theme ->
+        PageTheme.remember(theme)
+        settingsLauncher.launch(Intent(this, SettingsActivity::class.java))
+    }
 
     /** Every extension's part of the person on this phone goes (off the main thread, never cancelled half-way). */
     private fun forgetLocalData() {
@@ -1077,7 +1082,10 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
                 offlineBar.visibility = View.GONE
             }
             shownKeptAt = keptAt
-            if (origin.matches(url)) tellNetwork()
+            if (origin.matches(url)) {
+                tellNetwork()
+                view.evaluateJavascript(PageTheme.SCRIPT, PageTheme::remember)
+            }
             val status = httpStatus.remove(key)
             val gateway = status != null && status >= 502
             val own = origin.matches(url)

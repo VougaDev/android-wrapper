@@ -23,6 +23,7 @@ import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.vougadev.shell.push.Push
 import com.vougadev.shell.web.LinkPolicy
+import com.vougadev.shell.web.PageTheme
 
 /**
  * THE APP'S NATIVE SETTINGS, reached from the account menu (`VougaDevNative.openSettings()`), never from the main menu:
@@ -35,6 +36,7 @@ class SettingsActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         // Section titles in the theme's primary colour: its accent may be too light to read on the background.
         theme.applyStyle(R.style.ShellSettingsOverlay, true)
+        delegate.localNightMode = PageTheme.night  // the site's light or dark, never the phone's against it
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         setContentView(R.layout.shell_settings)
