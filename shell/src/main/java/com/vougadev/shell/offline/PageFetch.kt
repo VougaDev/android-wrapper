@@ -53,7 +53,8 @@ class PageFetch(private val client: OkHttpClient) {
                 val type = response.header("Content-Type").orEmpty()
                 val mime = type.substringBefore(';').trim().lowercase()
                 val length = response.body.contentLength()
-                if (response.code !in SERVABLE || mime != "text/html" || length > MAX_BYTES) return null
+                // a 5xx of any type comes back too: the edge's bare "error code: 502" is text/plain, and is never shown
+                if (response.code !in SERVABLE || (mime != "text/html" && response.code < 500) || length > MAX_BYTES) return null
                 val body = response.body.bytes()
                 if (body.size > MAX_BYTES) return null
                 // A page the site marks `no-store` (a medical file, a prescription) is shown, never kept on the phone.

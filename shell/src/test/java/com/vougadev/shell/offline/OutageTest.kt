@@ -24,6 +24,21 @@ class OutageTest {
     }
 
     @Test
+    fun theCompanyPageMetaIsReadFromTheAnswer() {
+        listOf(
+            "<head><meta name=\"vougadev-page\" content=\"proxi\"></head>",
+            "<HEAD><META charset=utf-8><Meta content='jobs' name='vougadev-page'/></HEAD>",
+            "<meta name=vougadev-page content=ship>",
+        ).forEach { assertTrue(it, Outage.hasMeta(it.toByteArray())) }
+        listOf(
+            "error code: 502",
+            "<title>Bad gateway | proxi.vougadev.com | Cloudflare</title><meta name=\"robots\" content=\"noindex\">",
+            "<meta name=\"vougadev-pages\" content=\"x\">",
+            "<p>name=\"vougadev-page\"</p>",
+        ).forEach { assertFalse(it, Outage.hasMeta(it.toByteArray())) }
+    }
+
+    @Test
     fun theSiteIsBackWithAnyAnswerUnder500() {
         listOf(200, 302, 404).forEach { assertTrue("$it", Outage.back(it)) }
         listOf(500, 502, 503, 504).forEach { assertFalse("$it", Outage.back(it)) }

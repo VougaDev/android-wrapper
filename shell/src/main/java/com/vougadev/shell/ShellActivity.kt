@@ -1057,6 +1057,9 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
                 pageFiles += url.toString()
                 return null
             }
+            // A page the network answers is never "from the phone", whatever an earlier visit of the same address was
+            // (else its answer, an edge's 502 included, would skip the checks below as a kept copy).
+            servedFromPhone.remove(PageCache.keyOf(url.toString()))
             // EACH PAGE FETCHED ONCE: the WebView's answer and the copy kept for offline are the same read.
             val answer = try {
                 pageFetch.fetch(url.toString(), request.requestHeaders, CookieManager.getInstance().getCookie(url.toString()), session.userAgent, session.acceptLanguage())
@@ -1073,6 +1076,14 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
             val cookies = CookieManager.getInstance()
             answer.setCookies.forEach { cookies.setCookie(url.toString(), it) }
             if (answer.code >= 400) httpStatus[PageCache.keyOf(url.toString())] = answer.code
+            // NEVER A RAW ERROR PAGE, NOT EVEN FOR A MOMENT: the edge's 5xx (Cloudflare's "Bad gateway" while the server
+            // is out of reach) never reaches the WebView. The copy kept on the phone instead, else an empty page that
+            // onPageFinished turns into the native screen ([foreignPage]).
+            if (Outage.isEdge(answer.code, Outage.hasMeta(answer.body))) {
+                val page = url.toString()
+                runOnUiThread { if (connectivity.online) { restarting = true; watchRestart(page) } else forcedOffline = true }
+                return fromPhone(request) ?: WebResourceResponse("text/html", "utf-8", answer.code, answer.reason, emptyMap(), ByteArrayInputStream(ByteArray(0)))
+            }
             return WebResourceResponse(answer.mimeType, answer.charset, answer.code, answer.reason, answer.headers, ByteArrayInputStream(answer.body))
         }
 

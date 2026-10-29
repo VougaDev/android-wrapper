@@ -26,6 +26,7 @@ class PageFetchTest {
                 "/private/" -> Triple(200, "text/html; charset=utf-8", "<title>Dossier · App</title>")
                 "/gone/" -> Triple(404, "text/html; charset=utf-8", "<p>introuvable</p>")
                 "/label.pdf" -> Triple(200, "application/pdf", "%PDF")
+                "/down/" -> Triple(502, "text/plain; charset=UTF-8", "error code: 502")
                 else -> Triple(302, "text/html", "")
             }
             if (exchange.requestURI.path == "/private/") exchange.responseHeaders.add("Cache-Control", "max-age=0, No-Store, private")
@@ -91,6 +92,15 @@ class PageFetchTest {
         assertNull(get("/somewhere/"))
         assertNull(get("/label.pdf"))
         assertNull(fetch.take("$base/somewhere/"))
+    }
+
+    @Test
+    fun theEdgesBareErrorComesBackSoItIsNeverShownNorKept() {
+        // Cloudflare's "error code: 502" while the server is out of reach (Echo on the WP35, 2026-10-29)
+        val answer = get("/down/")!!
+        assertEquals(502, answer.code)
+        assertTrue(Outage.isEdge(answer.code, Outage.hasMeta(answer.body)))
+        assertNull(fetch.take("$base/down/"))
     }
 
     @Test

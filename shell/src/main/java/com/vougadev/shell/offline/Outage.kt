@@ -10,6 +10,12 @@ object Outage {
     /** [status] null: a 2xx. Pure. */
     fun isEdge(status: Int?, hasMeta: Boolean): Boolean = status != null && status >= 500 && !hasMeta
 
+    /** Whether an answer's HTML carries the company-page meta (`<meta name="vougadev-page" ...>`) in its head. Pure. */
+    fun hasMeta(body: ByteArray): Boolean = META.containsMatchIn(String(body, 0, minOf(body.size, HEAD_BYTES), Charsets.UTF_8))
+
+    private const val HEAD_BYTES = 64 * 1024
+    private val META = Regex("<meta\\s[^>]*name\\s*=\\s*[\"']?vougadev-page[\"'\\s/>]", RegexOption.IGNORE_CASE)
+
     /** Whether the site is back, asked again during a restart: any answer under 500 is its own. Pure. */
     fun back(status: Int): Boolean = status < 500
 }

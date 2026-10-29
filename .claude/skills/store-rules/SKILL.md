@@ -78,8 +78,9 @@ The main reason web wrappers are rejected. The app must do what Safari cannot:
     home indicator;
   - dialogs on a phone are bottom sheets or full-screen, with the main action at the bottom within thumb reach;
   - no web words (the table above), no "open in a new tab", no browser-only gestures;
-  - every company page, error pages included, carries `<meta name="vougadev-page" content="<service>">` in its head:
-    the shells treat a main-frame answer from a trusted origin without it as an edge or CDN error (offline handling);
+  - every company page, error pages included, carries `<meta name="vougadev-page" content="<service>">` in its head
+    (the template's `base.html` has it; an app's own error layout needs it too): the shells treat a main-frame 5xx
+    from a trusted origin without it as the edge's or the CDN's (Cloudflare's "Bad gateway"), never shown;
   - a page whose title is not a screen name (a home whose title is a slogan for search engines) says its name in
     `<meta name="vougadev-screen" content="Accueil">`. The shells list saved screens by it, or else by the title
     without " · <App>"; never by a slogan;
@@ -256,7 +257,10 @@ Report each line as done, failed and fixed, or skipped (with why). Never say "co
    Any screen that is only "unavailable / retry" fails the check.
 6. **Errors.** Open a missing address, a forbidden page, and an expired form (a POST with a wrong CSRF token). Each one
    shows the site's own page with a way back. With the site stopped behind the edge (or its 502 page simulated), the
-   app shows its cached page or native screen, never the edge's page.
+   app shows its cached page or native screen, never the edge's page, not even for a moment. Check it on a cold start
+   AND on a page the app had just shown from the phone (offline, then back online while the server is still out of
+   reach, then pull to refresh): Cloudflare's "Bad gateway" under the "Hors connexion" bar is that case failing (the
+   WP35, 2026-10-29, fixed in android-wrapper).
 7. **4.2 evidence.** List the native features with the steps to see each one, for the review notes. Make sure the demo
    account has missions and shipments.
 8. **Login (iOS only).** Check whether the sign-in page shows Google or Telegram for this client. If it does, Sign in
