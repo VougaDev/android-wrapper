@@ -152,7 +152,11 @@ the phone. An app's own extensions add theirs. An extension the app does not hav
    (`PUT <pushDevicesPath>` `{kind: "fcm", token, label, app, platform: "android", locale}`, `POST …/forget` on sign-out
    or when notifications are turned off), and a data-only message `{app, url, screen?, topic, id, title, body}` drawn
    as a notification that opens its screen inside the app. VougaDev's notification service sends them.
-7. The site answers `POST /auth/app-session/` (bearer token in, session cookie out), takes the push token, reads the
+7. **Links to the site open the app (App Links):** the launcher declares an `autoVerify` `VIEW` intent filter for
+   the site's https paths it opens (`android:host`, `android:pathPrefix`) and the site serves
+   `/.well-known/assetlinks.json` naming the package and its signing certificates (release, Play App Signing). The
+   shell loads any `VIEW` link on the app's own origin in its WebView, cold start or not.
+8. The site answers `POST /auth/app-session/` (bearer token in, session cookie out), takes the push token, reads the
    user agent, calls `openSettings()` from "Privacy and data", and shows no install prompt and no cookie banner in the
    app.
 

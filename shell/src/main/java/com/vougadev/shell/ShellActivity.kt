@@ -428,7 +428,12 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
         when (val asked = pageFrom(intent)) {
             null -> Unit
             is Ask.SignIn -> askSignIn(asked.next)
-            is Ask.Page -> if (webViewAlive && signInScreen == null) open(asked.url) else afterSignIn = asked.url
+            is Ask.Page -> when {
+                // Recreated after the process was killed, before its first load: that load opens this page instead.
+                firstLoad != null -> firstLoad = { withConsent { boot(asked, null) } }
+                webViewAlive && signInScreen == null -> open(asked.url)
+                else -> afterSignIn = asked.url
+            }
         }
     }
 
@@ -491,6 +496,11 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
             intent?.data = null
             outsideAnswer?.invoke(NativeBridge.ok())
             outsideAnswer = null
+            return Ask.Page(back)
+        }
+        // A link to the site tapped in another app (an App Link: the app's manifest declares its paths): in the WebView.
+        if (action == Intent.ACTION_VIEW && back != null && origin.matches(back)) {
+            intent?.data = null
             return Ask.Page(back)
         }
         return when (action) {
