@@ -41,6 +41,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import androidx.core.content.FileProvider
@@ -645,9 +646,10 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
      * sends and why), then the system's dialog (Android 13+). A refusal blocks nothing; Settings turns them on later.
      */
     private fun askNotificationsOnce() {
+        if (session.config.notificationsAskedBySite) return // the site asks, through askNotifications()
         if (!Push.enabled(this) || Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) return
-        val prefs = getSharedPreferences(session.config.storeName + "_notifications", MODE_PRIVATE)
+        val prefs = notificationPrefs()
         if (prefs.getBoolean(KEY_ASKED, false)) return
         prefs.edit { putBoolean(KEY_ASKED, true) }
         MaterialAlertDialogBuilder(this)
@@ -660,6 +662,7 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
 
     override fun askNotifications(then: () -> Unit) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return then()
+        notificationPrefs().edit { putBoolean(KEY_ASKED, true) }
         afterNotifications = then
         notificationsLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
@@ -1410,8 +1413,41 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
         },
     )
 
-    /** The core's Promise members, in every app: the consent choices, and the native Settings screen. */
+    private fun notificationPrefs() = getSharedPreferences(session.config.storeName + "_notifications", MODE_PRIVATE)
+
+    /**
+     * "granted": notifications reach this phone; "prompt": the system's question may be asked; "denied": refused for
+     * good, only the phone's settings turn them on; "unavailable": this build receives no push.
+     */
+    private fun notificationState(): String {
+        if (!Push.enabled(this)) return "unavailable"
+        val on = NotificationManagerCompat.from(this).areNotificationsEnabled()
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return if (on) "granted" else "denied"
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+            return if (on) "granted" else "denied"
+        }
+        val askedBefore = notificationPrefs().getBoolean(KEY_ASKED, false)
+        return if (askedBefore && !shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS)) "denied" else "prompt"
+    }
+
+    private fun stateAnswer() = JSONObject(mapOf("state" to notificationState()))
+
+    /** `askNotifications()`: the app's sentence, then the system's dialog, when it may still be asked; the state after. */
+    private fun askNotificationsFromSite(answer: (JSONObject) -> Unit) {
+        if (notificationState() != "prompt") return answer(stateAnswer())
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.shell_notifications_title)
+            .setMessage(R.string.shell_notifications_reason)
+            .setPositiveButton(R.string.shell_notifications_continue) { _, _ -> askNotifications { answer(stateAnswer()) } }
+            .setNegativeButton(R.string.shell_notifications_later) { _, _ -> answer(stateAnswer()) }
+            .setOnCancelListener { answer(stateAnswer()) }
+            .show()
+    }
+
+    /** The core's Promise members, in every app: the consent choices, the native Settings screen, notifications. */
     private fun coreMethods(): Map<String, NativeBridge.Method> = linkedMapOf(
+        "notificationState" to NativeBridge.Method { _, answer -> answer(stateAnswer()) },
+        "askNotifications" to NativeBridge.Method { _, answer -> askNotificationsFromSite(answer) },
         "consent" to NativeBridge.Method { _, answer -> answer(JSONObject(Consent.choices(this).toMap())) },
         "openSettings" to NativeBridge.Method { _, answer ->
             openSettings()

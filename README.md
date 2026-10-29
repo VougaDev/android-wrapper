@@ -23,6 +23,8 @@ The same on Android and iOS; a page branches on the platform only through `platf
 | `features()` | the extensions this app has, e.g. `["tracking", "offline-map"]`, synchronous |
 | `consent()` | `Promise<{<purpose>: bool}>`: the choices made in the native consent dialog; `{}` when the app asks none |
 | `openSettings()` | `Promise<{ok: true}>`: the app's native Settings screen |
+| `notificationState()` | `Promise<{state}>`: `"granted"`, `"prompt"` (the system's question may be asked), `"denied"` (only the phone's settings turn them on) or `"unavailable"` (no push in this build) |
+| `askNotifications()` | `Promise<{state}>`: the app's sentence, then the system's dialog, when the state is `"prompt"`; the state after |
 
 **The `tracking` extension:** `startTracking({missionId, url?, intervalSeconds?, target?, title?, text?})`,
 `stopTracking()`, `trackingState()`. **`offline-map`** adds no member: the page's own tile requests are answered from
@@ -85,7 +87,9 @@ the phone. An app's own extensions add theirs. An extension the app does not hav
 - **An app's words**: no page, site, web, browser, link, URL, reload or tab in any native text (en, fr, es).
 
 - **Notifications.** Asked right after sign-in, once, with the app's own sentence (`shell_notifications_reason`), then
-  the system's dialog; a refusal blocks nothing, and Settings turns them on later. On only when the app is built with
+  the system's dialog; a refusal blocks nothing, and Settings turns them on later. With `notificationsAskedBySite`
+  the shell never asks on its own: the site calls `askNotifications()` when it chooses (Lexi: at the end of a lawyer's
+  guided steps, then on each device the account service has never seen). On only when the app is built with
   its Firebase file (never in this repository) and gives the site's push-devices address: the token goes to the site,
   which hands it to the notification hub.
 - **One hub sends every app's notifications.** A push says which app it belongs to and what it opens:

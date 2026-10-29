@@ -28,7 +28,10 @@ package com.vougadev.shell
  * - [scopes]: what the app asks the account service for;
  * - [signInFirst]: true, the app opens on the sign-in until the person is signed in (Jobs, Ship: nothing works
  *   without an account); false, a person without an account uses the site's public pages and signs in from the
- *   site's own "Sign in" (Care: finding care needs no account, Apple 5.1.1(v)); sign-out then returns to the home.
+ *   site's own "Sign in" (Care: finding care needs no account, Apple 5.1.1(v)); sign-out then returns to the home;
+ * - [notificationsAskedBySite]: false, notifications are asked right after sign-in, once; true, the shell never asks on
+ *   its own and the site asks through `askNotifications()` when it chooses (Lexi: after a lawyer's guided steps, then
+ *   on each new device).
  */
 data class ShellConfig(
     val appSlug: String,
@@ -53,6 +56,7 @@ data class ShellConfig(
     val debug: Boolean = false,
     val scopes: String = DEFAULT_SCOPES,
     val signInFirst: Boolean = true,
+    val notificationsAskedBySite: Boolean = false,
 ) {
     companion object {
         /** `permissions` carries the app's grants; no `resource`: the token is traded at the site for a session. */
