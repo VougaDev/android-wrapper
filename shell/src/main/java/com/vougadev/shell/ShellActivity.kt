@@ -587,6 +587,11 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
      */
     private fun startInAppSignIn(asked: SignInRoute.Asked? = null) {
         show(SignInScreen.WORKING)
+        // the site's light or dark as it is now: one just chosen on this page had no page load to be read at
+        if (webViewAlive) webView.evaluateJavascript(PageTheme.SCRIPT) { PageTheme.remember(it); loadSignIn(asked) } else loadSignIn(asked)
+    }
+
+    private fun loadSignIn(asked: SignInRoute.Asked?) {
         lifecycleScope.launch {
             val request = browser.request(asked) ?: return@launch show(SignInScreen.OFFLINE)
             signInRequest = request
