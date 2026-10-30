@@ -85,6 +85,10 @@ class ShellWebTest {
         assertEquals(androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_NO, PageTheme.nightMode("\"light\""))
         assertEquals(androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM, PageTheme.nightMode("null"))
         assertEquals(androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM, PageTheme.nightMode(null))
+        // the account service's sign-in pages take the same light or dark
+        assertEquals("dark", PageTheme.signInTheme(androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES))
+        assertEquals("light", PageTheme.signInTheme(androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_NO))
+        assertEquals("auto", PageTheme.signInTheme(androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM))
         // back closes a menu or a popover before it leaves the screen
         assertTrue(ModalBack.SCRIPT.contains(".dropdown-menu.show") && ModalBack.SCRIPT.contains(".popover.show"))
     }

@@ -7,6 +7,7 @@ import androidx.browser.customtabs.CustomTabColorSchemeParams
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import com.vougadev.shell.R
+import com.vougadev.shell.web.PageTheme
 import com.vougadev.shell.web.SignInRoute
 import net.openid.appauth.AuthorizationException
 import net.openid.appauth.AuthorizationRequest
@@ -58,7 +59,8 @@ class BrowserSignIn(private val context: Context, private val session: AppSessio
             // the account service's screens in the phone's language, as the web's own sign-in asks
             .setUiLocales(Locale.getDefault().language)
             .setPrompt(asked?.prompt)
-            .setAdditionalParameters(asked?.maxAge?.let { mapOf("max_age" to it.toString()) } ?: emptyMap())
+            // and in the site's light or dark, as the web's own sign-in asks
+            .setAdditionalParameters(mapOf("theme" to PageTheme.signInTheme()) + (asked?.maxAge?.let { mapOf("max_age" to it.toString()) } ?: emptyMap()))
             .build()
     }
 

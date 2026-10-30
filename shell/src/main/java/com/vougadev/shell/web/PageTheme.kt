@@ -29,6 +29,13 @@ object PageTheme {
 
     fun remember(result: String?) { night = nightMode(result) }
 
+    /** The account service's `theme` for its sign-in pages: the site's light or dark, "auto" (the phone's) before any page. */
+    fun signInTheme(mode: Int = night): String = when (mode) {
+        AppCompatDelegate.MODE_NIGHT_YES -> "dark"
+        AppCompatDelegate.MODE_NIGHT_NO -> "light"
+        else -> "auto"
+    }
+
     /** For a native screen that is not an AppCompat one (Compose): its base context in the site's light or dark. */
     fun wrap(base: Context): Context {
         val bits = when (night) {
