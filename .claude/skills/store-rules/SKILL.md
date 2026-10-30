@@ -80,7 +80,7 @@ The main reason web wrappers are rejected. The app must do what Safari cannot:
   - no web words (the table above), no "open in a new tab", no browser-only gestures;
   - every company page, error pages included, carries `<meta name="vougadev-page" content="<service>">` in its head
     (the template's `base.html` has it; an app's own error layout needs it too): the shells treat a main-frame 5xx
-    from a trusted origin without it as the edge's or the CDN's (Cloudflare's "Bad gateway"), never shown;
+    or 4xx page from a trusted origin without it as the edge's or the CDN's (Cloudflare's "Bad gateway" or 403), never shown;
   - a page whose title is not a screen name (a home whose title is a slogan for search engines) says its name in
     `<meta name="vougadev-screen" content="Accueil">`. The shells list saved screens by it, or else by the title
     without " · <App>"; never by a slogan;
@@ -98,7 +98,11 @@ The main reason web wrappers are rejected. The app must do what Safari cannot:
     that may have failed (no database, no menu). The API keeps its JSON errors;
   - the shell catches a main-frame error that does not come from the site (502, 503 or 504 from the edge, a CDN's
     error page, a timeout). It treats it as offline: the last cached copy of the page with a native bar, or the
-    native "not available" screen, never the raw page.
+    native "not available" screen, never the raw page;
+  - **a 4xx PAGE without the meta is not the site's either** (Cloudflare's 403 or 429, the proxy's 404 or 413,
+    Django's debug or CSRF page): never shown, the native "unavailable" screen instead, no restart loop (Echo,
+    2026-10-30). Only a 2xx or 3xx, or a 4xx that is a file, is shown without the meta. The site gives Django's CSRF
+    failure its own page (`CSRF_FAILURE_VIEW`), with the meta.
 - **Push is never optional** (see "Push notifications: required in every app" below).
 - **The shell's core alone is never enough.** Core = the WebView, the system sign-in, the link rules, the offline
   screen. Every app enables at least one real native extension that matters to its users: `tracking`, `offline-map`

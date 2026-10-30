@@ -808,7 +808,12 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
      * offline. The copy kept on the phone - or, as the app starts, the last one kept - with the native bar; else the
      * native screen with what is available.
      */
-    private fun foreignPage(url: String) {
+    private fun foreignPage(url: String, status: Int?) {
+        if (!Outage.restarting(status)) {
+            failedUrl = url
+            showUnavailable(url)
+            return
+        }
         if (connectivity.online) {
             restarting = true
             watchRestart(url)
@@ -1087,10 +1092,13 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
             // NEVER A RAW ERROR PAGE, NOT EVEN FOR A MOMENT: the edge's 5xx (Cloudflare's "Bad gateway" while the server
             // is out of reach) never reaches the WebView. The copy kept on the phone instead, else an empty page that
             // onPageFinished turns into the native screen ([foreignPage]).
-            if (Outage.isEdge(answer.code, Outage.hasMeta(answer.body))) {
+            if (Outage.isEdge(answer.code, Outage.hasMeta(answer.body), answer.mimeType)) {
                 val page = url.toString()
+                val empty = WebResourceResponse("text/html", "utf-8", answer.code, answer.reason, emptyMap(), ByteArrayInputStream(ByteArray(0)))
+                // A 4xx not of the site (Cloudflare's 403, the proxy's 404): the native "unavailable" screen, no restart.
+                if (!Outage.restarting(answer.code)) return empty
                 runOnUiThread { if (connectivity.online) { restarting = true; watchRestart(page) } else forcedOffline = true }
-                return fromPhone(request) ?: WebResourceResponse("text/html", "utf-8", answer.code, answer.reason, emptyMap(), ByteArrayInputStream(ByteArray(0)))
+                return fromPhone(request) ?: empty
             }
             return WebResourceResponse(answer.mimeType, answer.charset, answer.code, answer.reason, answer.headers, ByteArrayInputStream(answer.body))
         }
@@ -1139,13 +1147,13 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
             val own = origin.matches(url)
             when {
                 keptAt != null -> if (own) siteFinished(url, keptAt)
-                // NEVER A RAW ERROR PAGE: a 5xx without the company-page meta is an edge's, a proxy's or a CDN's; any
-                // other answer is the site's own (a CV, an invoice, a PDF), shown meta or not ([Outage.isEdge]).
+                // NEVER A RAW ERROR PAGE: an error page without the company-page meta is an edge's, a proxy's, a CDN's
+                // or a framework's; any other answer is the site's own (a CV, an invoice, a PDF) ([Outage.isEdge]).
                 own || trusted.any { it.matches(url) } -> view.evaluateJavascript(PAGE_META_CHECK) { found ->
-                    if (failedUrl == null && Outage.isEdge(status, found != "false")) foreignPage(url) else if (own) siteFinished(url, null)
+                    if (failedUrl == null && Outage.isEdge(status, found != "false")) foreignPage(url, status) else if (own) siteFinished(url, null)
                 }
                 // Another company page (the account service's) the edge could not serve: never the raw error.
-                gateway && failedUrl == null -> foreignPage(url)
+                gateway && failedUrl == null -> foreignPage(url, status)
                 own -> siteFinished(url, null)
             }
         }

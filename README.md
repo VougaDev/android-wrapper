@@ -79,9 +79,10 @@ the phone. An app's own extensions add theirs. An extension the app does not hav
   `openOutside({url, returnUrl})` on a `trustedOrigins` origin) goes to Chrome's Auth Tab and comes back by itself
   under `outsideReturnPrefix`, loading in the WebView.
 - **Never a raw error page.** Every company page carries `<meta name="vougadev-page" content="<service>">` in its head.
-  An answer of the app's or a `trustedOrigins` origin is the edge's only when it is a 5xx without that meta (a 502, 503
-  or 504 from the edge): never shown. A 2xx, 3xx or 4xx is the site's own answer - a CV, an invoice, a ticket, a PDF, a
-  printable sheet - shown as it is, meta or not. The edge's answer never reaches the WebView, not even for a moment:
+  An error page of the app's or a `trustedOrigins` origin without that meta is never shown: a 5xx (a 502, 503 or 504
+  from the edge) and a 4xx page (Cloudflare's 403 or 429, the proxy's 404 or 413, a framework's debug or CSRF page);
+  a 4xx is the native "unavailable" screen with what the phone keeps, never a restart. A 2xx or 3xx is the site's own
+  answer - a CV, an invoice, a ticket, a PDF, a printable sheet - shown as it is, meta or not, and so is a 4xx file. The edge's answer never reaches the WebView, not even for a moment:
   the shell reads every page itself, a bare `error code: 502` (text/plain) included, and hands over the kept copy or
   an empty page that becomes the native screen. A page the network answers is never taken for one kept on the phone,
   even right after the phone's copy of the same address was shown. Offline only when the phone has no validated network; else the edge answered, so the
