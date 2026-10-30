@@ -44,4 +44,7 @@
     <string name="shell_restarting_bar">Le service redémarre · mis à jour à %1$s</string>
     <string name="shell_restarting_title">Le service redémarre</string>
     <string name="shell_restarting_text">Votre connexion fonctionne. Cet écran s\'ouvre de lui-même dès que le service répond à nouveau.</string>
+    <string name="shell_download_opening">Ouverture du document…</string>
+    <string name="shell_download_failed">Impossible d’ouvrir le document. Réessayez.</string>
+    <string name="shell_download_open_with">Ouvrir avec</string>
 </resources>

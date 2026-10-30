@@ -46,4 +46,7 @@
     <string name="shell_restarting_bar">Service restarting · updated at %1$s</string>
     <string name="shell_restarting_title">The service is restarting</string>
     <string name="shell_restarting_text">Your connection works. This screen opens by itself as soon as the service answers again.</string>
+    <string name="shell_download_opening">Opening the document…</string>
+    <string name="shell_download_failed">The document could not be opened. Try again.</string>
+    <string name="shell_download_open_with">Open with</string>
 </resources>

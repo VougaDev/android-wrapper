@@ -48,6 +48,7 @@ class Shell(context: Context, val config: ShellConfig, val extensions: List<Exte
     /** What the app keeps of the person goes: the pages kept for offline, and what every extension keeps. */
     suspend fun forget() {
         pages.clear()
+        com.vougadev.shell.web.Downloads.clear(app)
         extensions.forEach { it.forget(app) }
     }
 

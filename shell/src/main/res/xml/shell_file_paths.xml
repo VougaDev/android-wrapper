@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Photos taken with the camera app for a page's file input; an app that writes elsewhere too overrides this file. -->
+<!-- Photos taken with the camera app for a page's file input, and the files the site hands over (web/Downloads.kt);
+     an app that writes elsewhere too overrides this file. -->
 <paths>
     <cache-path name="captures" path="captures/" />
+    <files-path name="documents" path="documents/" />
 </paths>

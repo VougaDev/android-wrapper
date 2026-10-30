@@ -78,6 +78,7 @@ import com.vougadev.shell.web.MediaGrant
 import com.vougadev.shell.web.ModalBack
 import com.vougadev.shell.web.NativeBridge
 import com.vougadev.shell.web.NativeShim
+import com.vougadev.shell.web.Downloads
 import com.vougadev.shell.web.PageTheme
 import com.vougadev.shell.web.PullGuard
 import com.vougadev.shell.web.SignInRoute
@@ -340,6 +341,8 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
         }
         webView.webViewClient = ShellClient()
         webView.webChromeClient = ShellChrome()
+        // A FILE THE SITE HANDS OVER (a PDF, a DOCX): the WebView alone drops it ([Downloads]).
+        webView.setDownloadListener { url, _, disposition, mimeType, _ -> download(url, disposition, mimeType) }
         // The extensions' parts of this screen, before it starts (they may register activity result launchers).
         attachments = shell.extensions.mapNotNull { it.attach(this) }
         // Before the first load: a document-start script only reaches documents created after it.
@@ -1382,6 +1385,29 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
         val shot = cameraFile
         if (shot != null && shot.length() > 0) return cameraOutput?.let { arrayOf(it) }
         return null
+    }
+
+    /**
+     * A file of the app's site or a company domain, fetched as the WebView's session (another company's goes to the
+     * phone's browser, which has its own session), kept on the phone and opened in its viewer.
+     */
+    private fun download(url: String, disposition: String?, mimeType: String?) {
+        val uri = url.toUri()
+        val ours = uri.scheme == "https" && LinkPolicy.isCompany(uri.host, session.config.companyDomains) || origin.matches(uri)
+        if (!ours) {
+            openOutside(uri)
+            return
+        }
+        val name = Downloads.fileName(url, disposition, mimeType)
+        Toast.makeText(this, R.string.shell_download_opening, Toast.LENGTH_SHORT).show()
+        lifecycleScope.launch {
+            val file = Downloads.fetch(applicationContext, url, name, CookieManager.getInstance().getCookie(url), session.userAgent, session.acceptLanguage())
+            val opened = file != null && (shell.extensions.any { it.openDocument(this@ShellActivity, file, mimeType) }
+                || Downloads.open(this@ShellActivity, file, mimeType))
+            if (!opened) {
+                Toast.makeText(this@ShellActivity, R.string.shell_download_failed, Toast.LENGTH_LONG).show()
+            }
+        }
     }
 
     /** Photos already handed to a page or a handover were sent or abandoned; the cache is not an album. */

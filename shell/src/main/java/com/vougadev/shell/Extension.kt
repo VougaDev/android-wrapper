@@ -44,6 +44,12 @@ interface Extension {
      */
     fun interceptCrossOrigin(context: Context, request: WebResourceRequest): WebResourceResponse? = null
 
+    /**
+     * A file the site handed over, now on the phone ([com.vougadev.shell.web.Downloads]): true when this extension shows
+     * it (Business Builder's own document viewer); else the phone's viewer opens it.
+     */
+    fun openDocument(activity: Activity, file: java.io.File, mimeType: String?): Boolean = false
+
     /** Sign-out, while the site's session is still open; [caller] never renews it. */
     suspend fun beforeSessionEnds(context: Context, caller: AppCaller) = Unit
 

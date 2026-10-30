@@ -107,6 +107,10 @@ the phone. An app's own extensions add theirs. An extension the app does not hav
   site hides its own banner.
 - **Camera and microphone** (a video call over WebRTC on the site's pages): granted to the app's own origin only when
   the app declares `CAMERA` / `RECORD_AUDIO` in its manifest, after the system's dialog; refused otherwise.
+- **Files the site hands over** (a PDF, a DOCX, a spreadsheet, or anything sent as `Content-Disposition: attachment`)
+  are fetched as the WebView's session into the app's own storage (`files/documents/`, 50 MB at most, cleared on
+  sign-out), then offered first to the extensions' `openDocument` (Business Builder: its own reader), else opened in
+  the phone's viewer, else the share sheet. The WebView alone would drop them.
 - **A page answered `Cache-Control: no-store`** (a medical file, a prescription) is shown but never kept for offline.
 - **No install prompt** anywhere; a site hides its own when `VougaDevNative` is present.
 - **Offline, never a dead end.** The pages the person visited and their same-origin files are kept on the phone (a size
@@ -144,7 +148,7 @@ the phone. An app's own extensions add theirs. An extension the app does not hav
 3. Its launcher is an empty subclass of `ShellActivity` (its component name stays its own), with
    `manifestPlaceholders["appAuthRedirectScheme"] = applicationId`.
 4. Its own features are extensions too (`Extension`: its feature name, its bridge members, the native screen a path or
-   a notification opens, what it keeps of the person, its Settings rows).
+   a notification opens, the files it opens itself (`openDocument`), what it keeps of the person, its Settings rows).
 5. Brand it with resources of the same names: `app_name`, the colours `shell_signin_background`, `shell_signin_title`,
    `shell_signin_muted`, `shell_accent`, `shell_on_accent`, `shell_pull`, the drawables `shell_signin_mark` and
    `shell_notification_icon`, the string `shell_notifications_reason` and the extensions' texts
