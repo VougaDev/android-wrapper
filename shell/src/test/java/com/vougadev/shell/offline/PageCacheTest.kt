@@ -87,6 +87,7 @@ class PageCacheTest {
         assertEquals("Mes envois", PageCache.nameOf("<head><title>Mes envois · Ship</title></head>", "Ship"))
         assertEquals("Détails · Envoi", PageCache.nameOf("<head><title>Détails · Envoi</title></head>", "Ship"))
         assertEquals("Ship", PageCache.nameOf("<head><title>Ship · Ship</title></head>", "Ship"))
+        assertEquals("Mes projets", PageCache.nameOf("<head><title>Mes projets · Business Builder</title></head>", "Business"))
         assertNull(PageCache.nameOf("<head><meta name=\"description\" content=\"x\"></head><body><meta name=\"vougadev-screen\" content=\"No\"></body>", "Ship"))
     }
 

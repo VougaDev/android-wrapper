@@ -149,14 +149,18 @@ class PageCache(private val dir: File, private val capBytes: Long, private val c
 
         /**
          * The screen's name for the offline list: the page's `<meta name="vougadev-screen" content="…">` when it says
-         * one (a home whose title is a slogan), else its title without the ` · <App>` the site adds.
+         * one (a home whose title is a slogan), else its title without the ` · <App>` the site adds (the site may give
+         * its longer name: "Mes projets · Business Builder" for the app "Business").
          */
         fun nameOf(html: String, appName: String): String? {
             val head = html.substringBefore("</head>")
             val said = META.findAll(head).map { it.value }.firstOrNull { SCREEN.containsMatchIn(it) }
                 ?.let { CONTENT.find(it)?.groupValues?.get(2) }
                 ?.replace(Regex("\\s+"), " ")?.let(::unescape)?.trim()?.ifEmpty { null }
-            return said ?: titleOf(html)?.removeSuffix(" · $appName")?.trim()?.ifEmpty { null }
+            return said ?: titleOf(html)?.let { title ->
+                val site = title.substringAfterLast(" · ", "")
+                if (site.contains(appName, ignoreCase = true)) title.substringBeforeLast(" · ") else title
+            }?.trim()?.ifEmpty { null }
         }
 
         /**

@@ -230,6 +230,8 @@ built for a store or submitted without them working end to end:
 
 ## The check (run it before any store build or submission)
 
+Run it on Android first and fix everything there; iOS starts only once Android passes (native-app-design, "Order").
+
 Report each line as done, failed and fixed, or skipped (with why). Never say "compliant" after a partial check.
 
 1. **Pages inside the app, both platforms.** Crawl the site with a headless browser, with
@@ -259,6 +261,14 @@ Report each line as done, failed and fixed, or skipped (with why). Never say "co
    - relaunch: the app opens on the last pages from the phone, with the native screens;
    - tap through them, and try an action, which must be queued or wait, never fail.
    Any screen that is only "unavailable / retry" fails the check.
+   - The app's FIRST screen (reached through a redirect: `/` to the signed-in home, the end of a sign-in) must be among
+     the kept pages: the WebView's own redirects skip `shouldInterceptRequest`, so a shell that does not reload them
+     keeps every page but the core one (Business, 2026-10-31; android-wrapper reloads same-site redirects).
+   - A screen never visited offers Back (to the page under it) as well as the kept pages and Retry.
+   - An action that needs the network says so calmly once ("No connection: this needs the network…"), never a red
+     "Network error" toast, never twice.
+   - Test offline with the process killed first: an adb reverse removed under a running app leaves its open sockets
+     working, and the "offline" pages then come from the computer.
 6. **Errors.** Open a missing address, a forbidden page, and an expired form (a POST with a wrong CSRF token). Each one
    shows the site's own page with a way back. With the site stopped behind the edge (or its 502 page simulated), the
    app shows its cached page or native screen, never the edge's page, not even for a moment. Check it on a cold start

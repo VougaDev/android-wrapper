@@ -172,6 +172,9 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
     @Volatile
     private var restarting = false
 
+    /** Redirects inside the site loaded anew since the last page finished ([ShellClient.shouldOverrideUrlLoading]). */
+    private var siteRedirects = 0
+
     /** The page shown is the app's own: its requests to another origin may be answered by an extension. */
     @Volatile
     private var pageOnSite = false
@@ -300,9 +303,11 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
         errorText = findViewById(R.id.error_text)
         errorBack = findViewById(R.id.error_back)
         errorBack.setOnClickListener {
+            val failed = failedUrl
             errorView.visibility = View.GONE
             failedUrl = null
-            if (webViewAlive && webView.canGoBack()) webView.goBack()
+            // the failed address entered the history: back from it; else the page under the screen is the one wanted
+            if (webViewAlive && webView.canGoBack() && (failed == null || !pageUnder(failed))) webView.goBack()
         }
         offlineList = findViewById(R.id.offline_list)
         offlineBar = findViewById(R.id.offline_bar)
@@ -781,6 +786,7 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
 
     /** A page of the site, as the site served it (or the phone kept it): kept for offline, and the session watched. */
     private fun siteFinished(url: String, keptAt: Long?) {
+        siteRedirects = 0
         if (failedUrl == null) firstPageOfStart = false
         if (keptAt == null) restarting = false // the site answered with its own page
         val siteSession = SessionCookies.isSignedIn(CookieManager.getInstance().getCookie(origin.baseUrl))
@@ -914,7 +920,8 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
     private fun showUnavailable(url: String) {
         offlineBar.visibility = View.GONE
         offlineList.removeAllViews()
-        errorBack.isVisible = webViewAlive && webView.canGoBack()
+        // asked before the failed address enters the history: the page still under the screen counts as somewhere to go back to
+        errorBack.isVisible = webViewAlive && (webView.canGoBack() || pageUnder(url))
         val key = PageCache.keyOf(url)
         val pages = shell.pages.pages().filter { it.url != key }.take(MAX_OFFLINE_ROWS)
         val entries = shell.extensions.flatMap { it.offlineEntries(this) }
@@ -943,6 +950,10 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
         }
         errorView.visibility = View.VISIBLE
     }
+
+    /** A page of the site other than [failed] is in the WebView, under the error screen. */
+    private fun pageUnder(failed: String): Boolean =
+        webView.url?.let { origin.matches(it) && PageCache.keyOf(it) != PageCache.keyOf(failed) } == true
 
     /** One row of the offline list: a title, a quiet line under it, the whole row tappable. */
     private fun offlineRow(title: String, detail: String?, onClick: () -> Unit): View {
@@ -993,7 +1004,15 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
             val screen = if (isSite) nativeScreen(uri.path) else null
             val tapped = request.hasGesture() && !request.isRedirect
             return when (LinkPolicy.decide(uri.scheme, uri.host, isSite, screen != null, uri.path, session.config.companyDomains, session.config.outsideHosts, tapped)) {
-                LinkPolicy.Decision.LOAD_INSIDE -> false
+                // A redirect inside the site (`/` to the first screen, the end of a sign-in): the WebView's own follow
+                // skips shouldInterceptRequest, so the page would escape the error checks and never be kept for
+                // offline. Loaded anew instead (a loop stops after a few hops: the WebView then shows it as it is).
+                LinkPolicy.Decision.LOAD_INSIDE -> if (request.isRedirect && isSite && ++siteRedirects <= MAX_SITE_REDIRECTS) {
+                    view.loadUrl(uri.toString())
+                    true
+                } else {
+                    false
+                }
                 LinkPolicy.Decision.SIGN_IN -> {
                     // NEVER THE SITE'S OWN WEB SIGN-IN IN THE APP: the session is renewed, then the sign-in's `next` opens -
                     // or, for a sign-up (`prompt=create`) or a re-authentication (`max_age`), the account service's own.
@@ -1567,6 +1586,7 @@ open class ShellActivity : AppCompatActivity(), ExtensionHost {
         private const val ACTION_SIGN_IN = "com.vougadev.shell.action.SIGN_IN"
         private const val EXTRA_PAGE_PATH = "com.vougadev.shell.extra.PAGE_PATH"
         private const val TAG = "VougaDevShell"
+        private const val MAX_SITE_REDIRECTS = 5
         private const val CAPTURES_DIR = "captures"
         private const val KEY_ASKED = "asked"
         private const val MAX_OFFLINE_ROWS = 8
