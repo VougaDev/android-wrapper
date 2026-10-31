@@ -5,6 +5,7 @@ import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
 import androidx.core.content.edit
+import com.vougadev.shell.ShellConfig
 import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
@@ -50,14 +51,28 @@ class TokenStore(private val values: Values, private val sealer: Sealer) {
         values.put(KEY_REFRESH, sealer.seal(refreshToken))
     }
 
+    /**
+     * THE SCOPES THE KEPT TOKEN'S GRANT WAS MADE WITH: a refresh keeps them, so a build asking for more must sign in
+     * again. A token kept before this was written came from a build asking the shell's defaults.
+     */
     @Synchronized
-    fun clear() = values.put(KEY_REFRESH, null)
+    fun grantedScopes(): String = values.get(KEY_SCOPES) ?: ShellConfig.DEFAULT_SCOPES
+
+    @Synchronized
+    fun saveGrantedScopes(scopes: String) = values.put(KEY_SCOPES, scopes)
+
+    @Synchronized
+    fun clear() {
+        values.put(KEY_REFRESH, null)
+        values.put(KEY_SCOPES, null)
+    }
 
     /** A token is kept (not opened: cheap enough for the main thread; one that no longer opens fails its renewal). */
     val signedIn: Boolean get() = values.get(KEY_REFRESH) != null
 
     private companion object {
         const val KEY_REFRESH = "refresh_token"
+        const val KEY_SCOPES = "granted_scopes"
     }
 }
 

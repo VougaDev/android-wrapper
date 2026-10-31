@@ -1,5 +1,6 @@
 package com.vougadev.shell.auth
 
+import com.vougadev.shell.ShellConfig
 import com.vougadev.shell.net.ApiOutcome
 import com.vougadev.shell.net.AppCaller
 import com.vougadev.shell.web.AppOrigin
@@ -157,5 +158,26 @@ class SessionKeeperTest {
         val server = FakeServer { FakeServer.response(it, 403, """{"code": "identity_expired", "detail": "Renew it."}""") }
         assertEquals(ApiOutcome.Refused(403, "identity_expired", "Renew it."), caller(server).get(items))
         assertTrue(refreshed.isEmpty())
+    }
+
+    @Test
+    fun anUpdateAskingForMoreScopesSignsInAgainInsteadOfRefreshing() = runBlocking {
+        val asking = SessionKeeper(store, { refreshed += it; refreshAnswer(it) }, { exchanged += it; exchangeAnswer(it) }, jar,
+            ShellConfig.DEFAULT_SCOPES + " identity")
+        assertEquals(Renewal.SIGN_IN, asking.renew(jar.text))
+        assertTrue(refreshed.isEmpty())
+        assertEquals("rt-1", store.refreshToken())
+        assertEquals(Renewal.RENEWED, asking.signedIn("at-3", "rt-3"))
+        assertEquals(ShellConfig.DEFAULT_SCOPES + " identity", store.grantedScopes())
+        jar.text = "sessionid=lost"
+        assertEquals(Renewal.RENEWED, asking.renew(jar.text))
+        assertEquals(listOf("rt-3"), refreshed)
+    }
+
+    @Test
+    fun aGrantCoversTheScopesItHoldsInAnyOrder() {
+        assertTrue(covers("openid profile identity", "identity openid"))
+        assertTrue(!covers("openid profile", "openid identity"))
+        assertTrue(covers(ShellConfig.DEFAULT_SCOPES, ShellConfig.DEFAULT_SCOPES))
     }
 }

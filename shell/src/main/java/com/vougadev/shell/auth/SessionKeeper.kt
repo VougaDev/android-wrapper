@@ -1,5 +1,6 @@
 package com.vougadev.shell.auth
 
+import com.vougadev.shell.ShellConfig
 import com.vougadev.shell.net.SessionCookies
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
@@ -42,6 +43,7 @@ class SessionKeeper(
     private val refresher: Refresher,
     private val exchange: suspend (String) -> Exchange,
     private val cookies: CookieJarPort,
+    private val scopes: String = ShellConfig.DEFAULT_SCOPES,
 ) {
     private val lock = Mutex()
 
@@ -53,6 +55,8 @@ class SessionKeeper(
         val now = SessionCookies.valueOf(cookies.jar(), SessionCookies.SESSION_COOKIE)
         if (now != null && now != lost) return Renewal.RENEWED
         val refreshToken = store.refreshToken() ?: return Renewal.SIGN_IN
+        // A REFRESH KEEPS THE OLD GRANT'S SCOPES: an update asking for more signs in again (silent while AUTH's session lives)
+        if (!covers(store.grantedScopes(), scopes)) return Renewal.SIGN_IN
         // NOT CANCELLED HALF-WAY: once the account service rotated the token, the new one must reach the store or the person is out.
         val answer = withContext(NonCancellable) {
             refresher.refresh(refreshToken).also { if (it is TokenAnswer.Tokens) store.save(it.refreshToken) }
@@ -71,6 +75,7 @@ class SessionKeeper(
     suspend fun signedIn(accessToken: String, refreshToken: String?): Renewal = withContext(Dispatchers.IO) {
         lock.withLock {
             store.save(refreshToken)
+            store.saveGrantedScopes(scopes)
             open(accessToken)
         }
     }
@@ -87,3 +92,6 @@ class SessionKeeper(
         Exchange.Refused -> Renewal.SIGN_IN
     }
 }
+
+/** True when every scope [asked] is among those [granted] (space-separated, OAuth's form). */
+fun covers(granted: String, asked: String): Boolean = granted.split(' ').toSet().containsAll(asked.split(' ').filter { it.isNotBlank() })

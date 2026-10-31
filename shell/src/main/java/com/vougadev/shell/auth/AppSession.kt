@@ -43,7 +43,7 @@ class AppSession(
 
     val endpoints = AuthEndpoints(client, AppHttp.client, ::discovery)
     private val exchange = SessionExchange(origin, { userAgent }, ::acceptLanguage, AppHttp.client)
-    val keeper = SessionKeeper(store, endpoints, exchange::open, cookies)
+    val keeper = SessionKeeper(store, endpoints, exchange::open, cookies, config.scopes)
 
     fun acceptLanguage(): String = AppHttp.acceptLanguage(AppHttp.phoneLanguages())
 
